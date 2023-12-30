@@ -2,38 +2,31 @@ package binance
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"math/rand"
+	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
 const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
-
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
-
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
-
-	// Maximum message size allowed from peer.
-	maxMessageSize = 512
+	binanceDefaultWebsocketURL = "wss://stream.binance.com:9443/stream"
+	pingDelay                  = time.Minute * 9
+	logTag                     = "binance-stream-client"
 )
 
-type StreamName struct {
-	Stream string `json:"stream"`
-}
-
 type Message[T any] struct {
-	StreamName
-	Data T `json:"data"`
+	Stream string `json:"stream"`
+	Data   T      `json:"data"`
 }
 
-type BinanceStreamClient struct {
-	conn        *websocket.Conn
-	multiplexor *Multiplexor
+type OutgoingTableEntry struct {
+	ch              chan []byte
+	subscriberCount int
 }
 
 type ReqMessage struct {
@@ -47,83 +40,149 @@ type ReqMessageAck struct {
 	ReqId  int    `json:"id"`
 }
 
-type DepthUpdateData struct {
-	Event       string     `json:"e"`
-	EventTime   int64      `json:"E"`
-	Symbol      string     `json:"s"`
-	FirstUpdate int        `json:"U"`
-	FinalUpdate int        `json:"u"`
-	Bids        [][]string `json:"b"`
-	Asks        [][]string `json:"a"`
+type BinanceStreamClient struct {
+	conn                 *websocket.Conn
+	subscriptionRegistry map[string]*OutgoingTableEntry
+	mu                   sync.Mutex
 }
 
-func NewBinanceClient() *BinanceStreamClient {
+func NewBinanceStreamClient() *BinanceStreamClient {
 	return &BinanceStreamClient{
-		conn: nil,
+		conn:                 nil,
+		subscriptionRegistry: make(map[string]*OutgoingTableEntry),
 	}
 }
 
 func (c *BinanceStreamClient) Connect() error {
-	conn, _, err := websocket.DefaultDialer.Dial("wss://stream.binance.com:9443/stream", nil)
+	log.Printf("[%s] connecting to the %s \n", logTag, binanceDefaultWebsocketURL)
+
+	Dialer := websocket.Dialer{
+		Proxy:            http.ProxyFromEnvironment,
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	conn, _, err := Dialer.Dial(binanceDefaultWebsocketURL, nil)
+	conn.SetReadLimit(655350)
+	conn.SetReadDeadline(time.Now().Add(pingDelay))
 	if err != nil {
 		return err
 	}
 	c.conn = conn
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
-	c.multiplexor = NewMultiplexor(conn)
+
+	go c.listenConnection()
 	return nil
 }
 
-func (c *BinanceStreamClient) Subscribe(topic string) chan interface{} {
-	ch := make(chan interface{})
+func (c *BinanceStreamClient) Subscribe(topic string) *domain.Subscription[[]byte] {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	conf := MultiplexorRegistration{
-		handleFunc: func(msg []byte) error {
-			message := make(map[string]interface{})
+	entry, ok := c.subscriptionRegistry[topic]
+	if ok {
+		entry.subscriberCount++
+		c.subscriptionRegistry[topic] = entry
 
-			err := json.Unmarshal(msg, &message)
-			if err != nil {
-				panic(err)
-			}
-
-			if message["stream"] == topic {
-				data := &Message[DepthUpdateData]{}
-
-				err = json.Unmarshal(msg, data)
-				if err != nil {
-					panic(err)
-				}
-
-				ch <- data
-				return nil
-			}
-
-			return nil
-		},
-		onSubscribe: func() ReqMessage {
-			return ReqMessage{
-				Method: "SUBSCRIBE",
-				ReqId:  getRandomReqID(),
-				Params: []string{topic},
-			}
-		},
-		onUnsubscribe: func() ReqMessage {
-			return ReqMessage{
-				Method: "UNSUBSCRIBE",
-				ReqId:  getRandomReqID(),
-				Params: []string{topic},
-			}
-		},
+		return &domain.Subscription[[]byte]{
+			Stream: entry.ch,
+			Unsubscribe: func() {
+				c.unsubscribe(topic)
+			},
+			Topic: topic,
+		}
 	}
 
-	c.multiplexor.Register(&conf)
+	ch := make(chan []byte)
 
-	return ch
+	c.subscriptionRegistry[topic] = &OutgoingTableEntry{
+		ch:              ch,
+		subscriberCount: 1,
+	}
+
+	log.Printf("[%s] subscribing to the %s \n", logTag, topic)
+
+	err := c.conn.WriteJSON(ReqMessage{
+		Method: "SUBSCRIBE",
+		ReqId:  getRandomReqID(),
+		Params: []string{topic},
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	return &domain.Subscription[[]byte]{
+		Stream: ch,
+		Unsubscribe: func() {
+			c.unsubscribe(topic)
+		},
+		Topic: topic,
+	}
 }
 
-func (c *BinanceStreamClient) Close() error {
+func (c *BinanceStreamClient) unsubscribe(topic string) error {
+	log.Printf("[%s] unsubscribing from the %s \n", logTag, topic)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.subscriptionRegistry[topic].subscriberCount > 1 {
+		c.subscriptionRegistry[topic].subscriberCount -= 1
+	} else if c.subscriptionRegistry[topic].subscriberCount == 1 {
+		close(c.subscriptionRegistry[topic].ch)
+		delete(c.subscriptionRegistry, topic)
+	}
+
+	err := c.conn.WriteJSON(ReqMessage{
+		Method: "UNSUBSCRIBE",
+		ReqId:  getRandomReqID(),
+		Params: []string{topic},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *BinanceStreamClient) Disconnect() error {
 	return c.conn.Close()
+}
+
+func (c *BinanceStreamClient) listenConnection() {
+	for {
+		_, msg, err := c.conn.ReadMessage()
+		if err != nil {
+			panic(err)
+		}
+
+		var unknownStreamMessage map[string]interface{}
+
+		err = json.Unmarshal(msg, &unknownStreamMessage)
+		if err != nil {
+			log.Fatalf("error: %v message %v", err, string(msg))
+		}
+
+		// if message have id then it is a response to a subscription
+		if unknownStreamMessage["id"] != nil {
+			id := int(unknownStreamMessage["id"].(float64))
+			entry, ok := c.subscriptionRegistry[fmt.Sprintf("%v", id)]
+			if ok {
+				fmt.Println("receive ack")
+				entry.ch <- msg
+			}
+
+			delete(c.subscriptionRegistry, fmt.Sprintf("%v", id))
+		}
+
+		if unknownStreamMessage["stream"] != nil {
+			topic := unknownStreamMessage["stream"].(string)
+			entry, ok := c.subscriptionRegistry[topic]
+			if ok {
+				entry.ch <- msg
+			}
+		}
+	}
 }
 
 func getRandomReqID() int {

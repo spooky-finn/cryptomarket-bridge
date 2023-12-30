@@ -4,29 +4,25 @@ import (
 	"fmt"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/binance"
-)
-
-var (
-	connected = make(chan bool, 1)
-	block     = make(chan bool, 1)
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
 func main() {
+	client := binance.NewBinanceStreamClient()
+	err := client.Connect()
 
-	client := binance.NewBinanceClient()
+	binanceStreamAPI := binance.NewBinanceStreamAPI(client)
 
-	client.Connect()
-
-	ch := client.Subscribe("btcusdt@depth@100ms")
-
-	println("subscribed")
-	for {
-		select {
-		case msg := <-ch:
-			m := msg.(*binance.Message[binance.DepthUpdateData])
-
-			fmt.Printf("Received message: %+v\n", m.Data)
-		}
+	if err != nil {
+		fmt.Printf("Error connecting to Binance stream API: %s", err)
 	}
-	<-block
+
+	depthStream := binanceStreamAPI.DepthDiffStream(&domain.MarketSymbol{
+		BaseAsset:  "xmr",
+		QuoteAsset: "btc",
+	})
+
+	for msg := range depthStream.Stream {
+		fmt.Printf("Message: %+v\n", msg.Data.EventTime)
+	}
 }
