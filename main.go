@@ -1,28 +1,31 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"time"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/binance"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
 func main() {
-	client := binance.NewBinanceStreamClient()
-	err := client.Connect()
+	streamClient := binance.NewBinanceStreamClient()
+	streamClient.Connect()
+	binanceAPI := binance.NewBinanceAPI()
+	binanceStream := binance.NewBinanceStreamAPI(streamClient)
 
-	binanceStreamAPI := binance.NewBinanceStreamAPI(client)
+	m := binance.NewBinanceOrderbookMaintainer(binanceAPI, binanceStream)
 
+	symbol, err := domain.NewMarketSymbol("BTC", "USDT")
 	if err != nil {
-		fmt.Printf("Error connecting to Binance stream API: %s", err)
+		panic(err)
 	}
 
-	depthStream := binanceStreamAPI.DepthDiffStream(&domain.MarketSymbol{
-		BaseAsset:  "xmr",
-		QuoteAsset: "btc",
-	})
+	orderbook := m.CreareOrderBook(symbol)
 
-	for msg := range depthStream.Stream {
-		fmt.Printf("Message: %+v\n", msg.Data.EventTime)
+	// every second pring the orderbook last update id
+	for {
+		log.Println(orderbook.LastUpdateID)
+		time.Sleep(1 * time.Second)
 	}
 }

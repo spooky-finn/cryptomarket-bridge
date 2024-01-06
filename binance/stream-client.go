@@ -41,15 +41,15 @@ type ReqMessageAck struct {
 }
 
 type BinanceStreamClient struct {
-	conn                 *websocket.Conn
-	subscriptionRegistry map[string]*OutgoingTableEntry
-	mu                   sync.Mutex
+	conn          *websocket.Conn
+	subscriptions map[string]*OutgoingTableEntry
+	mu            sync.Mutex
 }
 
 func NewBinanceStreamClient() *BinanceStreamClient {
 	return &BinanceStreamClient{
-		conn:                 nil,
-		subscriptionRegistry: make(map[string]*OutgoingTableEntry),
+		conn:          nil,
+		subscriptions: make(map[string]*OutgoingTableEntry),
 	}
 }
 
@@ -63,7 +63,7 @@ func (c *BinanceStreamClient) Connect() error {
 
 	conn, _, err := Dialer.Dial(binanceDefaultWebsocketURL, nil)
 	conn.SetReadLimit(655350)
-	conn.SetReadDeadline(time.Now().Add(pingDelay))
+
 	if err != nil {
 		return err
 	}
@@ -77,10 +77,10 @@ func (c *BinanceStreamClient) Subscribe(topic string) *domain.Subscription[[]byt
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	entry, ok := c.subscriptionRegistry[topic]
+	entry, ok := c.subscriptions[topic]
 	if ok {
 		entry.subscriberCount++
-		c.subscriptionRegistry[topic] = entry
+		c.subscriptions[topic] = entry
 
 		return &domain.Subscription[[]byte]{
 			Stream: entry.ch,
@@ -92,8 +92,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *domain.Subscription[[]byt
 	}
 
 	ch := make(chan []byte)
-
-	c.subscriptionRegistry[topic] = &OutgoingTableEntry{
+	c.subscriptions[topic] = &OutgoingTableEntry{
 		ch:              ch,
 		subscriberCount: 1,
 	}
@@ -125,11 +124,11 @@ func (c *BinanceStreamClient) unsubscribe(topic string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.subscriptionRegistry[topic].subscriberCount > 1 {
-		c.subscriptionRegistry[topic].subscriberCount -= 1
-	} else if c.subscriptionRegistry[topic].subscriberCount == 1 {
-		close(c.subscriptionRegistry[topic].ch)
-		delete(c.subscriptionRegistry, topic)
+	if c.subscriptions[topic].subscriberCount > 1 {
+		c.subscriptions[topic].subscriberCount -= 1
+	} else if c.subscriptions[topic].subscriberCount == 1 {
+		close(c.subscriptions[topic].ch)
+		delete(c.subscriptions, topic)
 	}
 
 	err := c.conn.WriteJSON(ReqMessage{
@@ -156,28 +155,29 @@ func (c *BinanceStreamClient) listenConnection() {
 			panic(err)
 		}
 
-		var unknownStreamMessage map[string]interface{}
+		var multiStreamData map[string]interface{}
 
-		err = json.Unmarshal(msg, &unknownStreamMessage)
+		err = json.Unmarshal(msg, &multiStreamData)
 		if err != nil {
 			log.Fatalf("error: %v message %v", err, string(msg))
 		}
 
+		// FIXME: handle log of ack message
 		// if message have id then it is a response to a subscription
-		if unknownStreamMessage["id"] != nil {
-			id := int(unknownStreamMessage["id"].(float64))
-			entry, ok := c.subscriptionRegistry[fmt.Sprintf("%v", id)]
+		if multiStreamData["id"] != nil {
+			id := int(multiStreamData["id"].(float64))
+			entry, ok := c.subscriptions[fmt.Sprintf("%v", id)]
 			if ok {
 				fmt.Println("receive ack")
 				entry.ch <- msg
 			}
 
-			delete(c.subscriptionRegistry, fmt.Sprintf("%v", id))
+			delete(c.subscriptions, fmt.Sprintf("%v", id))
 		}
 
-		if unknownStreamMessage["stream"] != nil {
-			topic := unknownStreamMessage["stream"].(string)
-			entry, ok := c.subscriptionRegistry[topic]
+		if multiStreamData["stream"] != nil {
+			topic := multiStreamData["stream"].(string)
+			entry, ok := c.subscriptions[topic]
 			if ok {
 				entry.ch <- msg
 			}

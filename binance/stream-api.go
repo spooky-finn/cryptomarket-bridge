@@ -7,8 +7,6 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
-// API docs: web-socket-streams.md
-
 var baseEndpoints = []string{
 	"wss://stream.binance.com:9443/stream",
 	"wss://stream.binance.com:443",
@@ -20,13 +18,13 @@ type BinanceStreamAPI struct {
 }
 
 type DepthUpdateData struct {
-	Event       string     `json:"e"`
-	EventTime   int64      `json:"E"`
-	Symbol      string     `json:"s"`
-	FirstUpdate int        `json:"U"`
-	FinalUpdate int        `json:"u"`
-	Bids        [][]string `json:"b"`
-	Asks        [][]string `json:"a"`
+	Event         string     `json:"e"`
+	EventTime     int64      `json:"E"`
+	Symbol        string     `json:"s"`
+	FirstUpdateId int64      `json:"U"`
+	FinalUpdateId int64      `json:"u"`
+	Bids          [][]string `json:"b"`
+	Asks          [][]string `json:"a"`
 }
 
 func NewBinanceStreamAPI(client *BinanceStreamClient) *BinanceStreamAPI {
