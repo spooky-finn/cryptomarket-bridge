@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	binanceDefaultWebsocketURL = "wss://stream.binance.com:9443/stream"
-	pingDelay                  = time.Minute * 9
-	logTag                     = "binance-stream-client"
+	binanceDefaultWebsocketEndpoint = "wss://stream.binance.com:9443/stream"
+	pingDelay                       = time.Minute * 9
+	logTag                          = "binance-stream-client"
 )
 
 type Message[T any] struct {
@@ -24,7 +24,7 @@ type Message[T any] struct {
 	Data   T      `json:"data"`
 }
 
-type OutgoingTableEntry struct {
+type SubscribtionEntry struct {
 	ch              chan []byte
 	subscriberCount int
 }
@@ -42,26 +42,26 @@ type ReqMessageAck struct {
 
 type BinanceStreamClient struct {
 	conn          *websocket.Conn
-	subscriptions map[string]*OutgoingTableEntry
+	subscriptions map[string]*SubscribtionEntry
 	mu            sync.Mutex
 }
 
 func NewBinanceStreamClient() *BinanceStreamClient {
 	return &BinanceStreamClient{
 		conn:          nil,
-		subscriptions: make(map[string]*OutgoingTableEntry),
+		subscriptions: make(map[string]*SubscribtionEntry),
 	}
 }
 
 func (c *BinanceStreamClient) Connect() error {
-	log.Printf("[%s] connecting to the %s \n", logTag, binanceDefaultWebsocketURL)
+	log.Printf("[%s] connecting to the %s \n", logTag, binanceDefaultWebsocketEndpoint)
 
 	Dialer := websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 5 * time.Second,
 	}
 
-	conn, _, err := Dialer.Dial(binanceDefaultWebsocketURL, nil)
+	conn, _, err := Dialer.Dial(binanceDefaultWebsocketEndpoint, nil)
 	conn.SetReadLimit(655350)
 
 	if err != nil {
@@ -92,7 +92,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *domain.Subscription[[]byt
 	}
 
 	ch := make(chan []byte)
-	c.subscriptions[topic] = &OutgoingTableEntry{
+	c.subscriptions[topic] = &SubscribtionEntry{
 		ch:              ch,
 		subscriberCount: 1,
 	}

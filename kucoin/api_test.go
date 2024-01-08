@@ -3,6 +3,7 @@ package kucoin
 import (
 	"testing"
 
+	"github.com/joho/godotenv"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,10 +16,12 @@ func TestGerWsConnOpts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.NotEmpty(t, opts.Data.Token)
+	assert.NotEmpty(t, opts.Token)
 }
 
 func TestGetOrderBookSnapshot(t *testing.T) {
+	godotenv.Load("../.env")
+
 	api := NewKucoinAPI()
 
 	symbol, _ := domain.NewMarketSymbol("BTC", "USDT")

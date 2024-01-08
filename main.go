@@ -4,11 +4,14 @@ import (
 	"log"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/binance"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
 func main() {
+	godotenv.Load()
+
 	streamClient := binance.NewBinanceStreamClient()
 	streamClient.Connect()
 	binanceAPI := binance.NewBinanceAPI()
