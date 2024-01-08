@@ -47,13 +47,13 @@ type OrderBookSnapshot struct {
 	Asks     [][]string `json:"asks"`
 }
 
-func (api *KucoinAPI) WsConnOpts() (*KucoinWSConnOpts, error) {
+func (api *KucoinAPI) WsConnOpts() (*kucoin.WebSocketTokenModel, error) {
 	resp, err := api.apiService.WebSocketPublicToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ws connection options: %w", err)
 	}
 
-	data := &KucoinWSConnOpts{}
+	data := &kucoin.WebSocketTokenModel{}
 
 	if err = json.Unmarshal([]byte(resp.RawData), data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response body: %w, response: %s", err, resp.Message)

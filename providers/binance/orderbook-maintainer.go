@@ -8,15 +8,16 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
-type BinanceOrderbookMaintainer struct {
+type OrderbookMaintainer struct {
 	api    *BinanceAPI
 	stream *BinanceStreamAPI
 
 	depthUpdateQueue deque.Deque[Message[DepthUpdateData]]
+	done             chan struct{}
 }
 
-func NewBinanceOrderbookMaintainer(api *BinanceAPI, stream *BinanceStreamAPI) *BinanceOrderbookMaintainer {
-	return &BinanceOrderbookMaintainer{
+func NewOrderbookMaintainer(api *BinanceAPI, stream *BinanceStreamAPI) *OrderbookMaintainer {
+	return &OrderbookMaintainer{
 		api:    api,
 		stream: stream,
 
@@ -24,23 +25,22 @@ func NewBinanceOrderbookMaintainer(api *BinanceAPI, stream *BinanceStreamAPI) *B
 	}
 }
 
-func (m *BinanceOrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *domain.OrderBook {
+func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) (*domain.OrderBook, error) {
 	firstUpd := m.subscribeDepthUpdate(symbol)
 	<-firstUpd
 
 	snapshot, err := m.api.OrderBookSnapshot(symbol, 5000)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	orderbook := domain.NewOrderBook("binance", symbol, snapshot)
 
 	go m.updateSelector(orderbook)
-
-	return orderbook
+	return orderbook, nil
 }
 
-func (m *BinanceOrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
+func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
 	firstUpdateApplied := false
 
 	for {
@@ -55,11 +55,9 @@ func (m *BinanceOrderbookMaintainer) updateSelector(orderbook *domain.OrderBook)
 			// The first processed event should have U <= lastUpdateId+1 AND u >= lastUpdateId+1
 			if !firstUpdateApplied &&
 				(update.Data.FirstUpdateId <= orderbook.LastUpdateID+1 && update.Data.FinalUpdateId >= orderbook.LastUpdateID+1) {
-				orderbook.ApplyUpdate(&domain.OrderBookUpdate{
-					Asks:         update.Data.Asks,
-					Bids:         update.Data.Bids,
-					LastUpdateID: update.Data.FinalUpdateId,
-				})
+				orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
+					update.Data.Bids, update.Data.Asks, update.Data.FinalUpdateId,
+				))
 				firstUpdateApplied = true
 				continue
 			}
@@ -70,22 +68,23 @@ func (m *BinanceOrderbookMaintainer) updateSelector(orderbook *domain.OrderBook)
 					log.Fatalf("binance: orderbook maintainer: not sequential update: %d != %d+1\n", update.Data.FirstUpdateId, orderbook.LastUpdateID)
 				}
 
-				orderbook.ApplyUpdate(&domain.OrderBookUpdate{
-					Asks:         update.Data.Asks,
-					Bids:         update.Data.Bids,
-					LastUpdateID: update.Data.FinalUpdateId,
-				})
+				orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
+					update.Data.Bids, update.Data.Asks, update.Data.FinalUpdateId,
+				))
 			}
-
 		} else {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
-
 	}
 }
 
+func Stop(m *OrderbookMaintainer) {
+	close(m.done)
+	_ = m.api.conn.Close()
+}
+
 // Return buffered channel which triggers on first update
-func (m *BinanceOrderbookMaintainer) subscribeDepthUpdate(symbol *domain.MarketSymbol) chan bool {
+func (m *OrderbookMaintainer) subscribeDepthUpdate(symbol *domain.MarketSymbol) <-chan bool {
 	counter := 0
 	firstUpdate := make(chan bool, 1)
 	subscribtion := m.stream.DepthDiffStream(symbol)
@@ -93,6 +92,8 @@ func (m *BinanceOrderbookMaintainer) subscribeDepthUpdate(symbol *domain.MarketS
 	go func() {
 		for {
 			select {
+			case <-m.done:
+				return
 			case update := <-subscribtion.Stream:
 				m.depthUpdateQueue.PushBack(update)
 

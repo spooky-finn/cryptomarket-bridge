@@ -10,7 +10,7 @@ func TestCreateOrderBook(t *testing.T) {
 	streamClient := NewBinanceStreamClient()
 	streamClient.Connect()
 
-	m := &BinanceOrderbookMaintainer{
+	m := &OrderbookMaintainer{
 		api:    NewBinanceAPI(),
 		stream: NewBinanceStreamAPI(streamClient),
 	}

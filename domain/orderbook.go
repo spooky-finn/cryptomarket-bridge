@@ -19,6 +19,14 @@ type OrderBookUpdate struct {
 	LastUpdateID int64
 }
 
+func NewOrderBookUpdate(bids [][]string, asks [][]string, lastUpdateID int64) *OrderBookUpdate {
+	return &OrderBookUpdate{
+		Bids:         bids,
+		Asks:         asks,
+		LastUpdateID: lastUpdateID,
+	}
+}
+
 type OrderBook struct {
 	Provider       string
 	Symbol         *MarketSymbol
