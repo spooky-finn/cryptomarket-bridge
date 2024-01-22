@@ -38,9 +38,6 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 func (o *OrderBookSnapshotUseCase) createOrderBook(
 	provider string, symbol *domain.MarketSymbol,
 ) (*domain.OrderBookSnapshot, error) {
-	// add log for debug purpose
-	// log.Printf("Orderbook snapshot for %s is not found in the runtime storage. Provider=%s", symbol.String(), provider)
-
 	result := o.apiResolver.ByProvider(provider).GetOrderBook(symbol)
 	if result.Err != nil {
 		return nil, result.Err
