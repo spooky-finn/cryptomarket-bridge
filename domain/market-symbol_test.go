@@ -45,7 +45,7 @@ func TestNewSymbolFromString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := domain.NewSymbolFromString(tt.symbol)
+			_, err := domain.NewMarketSymbolFromString(tt.symbol)
 
 			if tt.expectError {
 				assert.Error(t, err, "NewSymbolFromString() should return an error")

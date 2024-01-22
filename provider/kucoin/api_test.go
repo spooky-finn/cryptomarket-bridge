@@ -20,7 +20,10 @@ func TestGerWsConnOpts(t *testing.T) {
 }
 
 func TestGetOrderBookSnapshot(t *testing.T) {
-	godotenv.Load("../.env")
+	err := godotenv.Load("../../.env")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	api := NewKucoinAPI()
 

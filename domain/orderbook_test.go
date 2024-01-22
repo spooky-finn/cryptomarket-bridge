@@ -42,12 +42,12 @@ func TestOrderBook_ApplyUpdate(t *testing.T) {
 	snapshot := &OrderBookSnapshot{
 		LastUpdateId: 123,
 		Bids:         [][]string{{"10000", "1"}, {"9900", "2"}},
-		Asks:         [][]string{{"10100", "1.5"}, {"10200", "2.5"}},
+		Asks:         [][]string{{"10.300", "1.5"}, {"10200", "2.5"}},
 	}
 	update := &OrderBookUpdate{
 		LastUpdateID: 124,
-		Bids:         [][]string{{"9800", "3"}},                  // adding new bid
-		Asks:         [][]string{{"10300", "2"}, {"10100", "0"}}, // updating and removing ask
+		Bids:         [][]string{{"9800", "3"}},                 // adding new bid
+		Asks:         [][]string{{"10.3", "2"}, {"10200", "1"}}, // updating and removing ask
 	}
 
 	// Create a new OrderBook instance
@@ -60,7 +60,7 @@ func TestOrderBook_ApplyUpdate(t *testing.T) {
 	assert.Equal(t, update.LastUpdateID, ob.LastUpdateID, "LastUpdateID should match")
 	assert.NotEmpty(t, ob.Asks, "Asks should not be empty")
 	assert.NotEmpty(t, ob.Bids, "Bids should not be empty")
-	assert.Equal(t, [][]float64{{10200, 2.5}, {10300.0, 2.0}}, ob.Asks, "Asks should match")
+	assert.Equal(t, [][]float64{{10.3, 2.0}, {10200, 1}}, ob.Asks, "Asks should match")
 	assert.Equal(t, [][]float64{{10000, 1}, {9900.0, 2.0}, {9800.0, 3.0}}, ob.Bids, "Bids should match")
 }
 
@@ -82,7 +82,7 @@ func TestOrderBook_TakeSnapshot(t *testing.T) {
 	ob := NewOrderBook(provider, symbol, snapshot)
 
 	// Take a snapshot
-	result := ob.TakeSnapshot()
+	result := ob.TakeSnapshot(2)
 
 	// Assertions
 	assert.Equal(t, snapshot.LastUpdateId, result.LastUpdateId, "LastUpdateID should match")

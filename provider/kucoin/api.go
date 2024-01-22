@@ -11,8 +11,6 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
-const ENDPOINT = "https://api.kucoin.com"
-
 type KucoinAPI struct {
 	endpoint   string
 	apiService *kucoin.ApiService
@@ -20,7 +18,7 @@ type KucoinAPI struct {
 
 func NewKucoinAPI() *KucoinAPI {
 	return &KucoinAPI{
-		endpoint: ENDPOINT,
+		endpoint: os.Getenv("KUCOIN_BASE_URL"),
 		apiService: kucoin.NewApiService(
 			kucoin.ApiKeyOption(os.Getenv("KUCOIN_API_KEY")),
 			kucoin.ApiSecretOption(os.Getenv("KUCOIN_SECRET_KEY")),

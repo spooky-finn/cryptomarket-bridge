@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 const (
@@ -73,7 +73,7 @@ func (c *BinanceStreamClient) Connect() error {
 	return nil
 }
 
-func (c *BinanceStreamClient) Subscribe(topic string) *domain.Subscription[[]byte] {
+func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[]byte] {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -82,7 +82,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *domain.Subscription[[]byt
 		entry.subscriberCount++
 		c.subscriptions[topic] = entry
 
-		return &domain.Subscription[[]byte]{
+		return &interfaces.Subscription[[]byte]{
 			Stream: entry.ch,
 			Unsubscribe: func() {
 				c.unsubscribe(topic)
@@ -109,7 +109,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *domain.Subscription[[]byt
 		panic(err)
 	}
 
-	return &domain.Subscription[[]byte]{
+	return &interfaces.Subscription[[]byte]{
 		Stream: ch,
 		Unsubscribe: func() {
 			c.unsubscribe(topic)

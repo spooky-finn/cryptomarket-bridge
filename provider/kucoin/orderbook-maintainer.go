@@ -1,11 +1,13 @@
 package kucoin
 
 import (
+	"log"
 	"strconv"
 	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 type OrderbookMaintainer struct {
@@ -25,19 +27,26 @@ func NewOrderbookMaintainer(api *KucoinAPI, stream *KucoinStreamAPI) *OrderbookM
 	}
 }
 
-func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) (*domain.OrderBook, error) {
-	firstUpd := m.subscribeDepthUpdate(symbol)
+func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
+	log.Printf("creating orderbook for %s on kucoin", symbol.String())
+	firstUpd := m.subscribe(symbol)
 	<-firstUpd
 
 	snapshot, err := m.api.OrderBookSnapshot(symbol)
 	if err != nil {
-		return nil, err
+		return &interfaces.CreareOrderBookResult{
+			Err: err,
+		}
 	}
 
 	orderbook := domain.NewOrderBook("kucoin", symbol, snapshot)
-
 	go m.updateSelector(orderbook)
-	return orderbook, nil
+
+	return &interfaces.CreareOrderBookResult{
+		OrderBook: orderbook,
+		Snapshot:  snapshot,
+		Err:       nil,
+	}
 }
 
 func (m *OrderbookMaintainer) Stop() {
@@ -106,8 +115,7 @@ func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
 	}
 }
 
-func (m *OrderbookMaintainer) subscribeDepthUpdate(symbol *domain.MarketSymbol) <-chan time.Time {
-
+func (m *OrderbookMaintainer) subscribe(symbol *domain.MarketSymbol) <-chan time.Time {
 	t := time.NewTimer(3 * time.Second)
 	subscription, err := m.stream.DepthDiffStream(symbol)
 	if err != nil {

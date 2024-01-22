@@ -8,6 +8,7 @@ import (
 
 	"github.com/Kucoin/kucoin-go-sdk"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 type KucoinStreamAPI struct {
@@ -17,8 +18,7 @@ type KucoinStreamAPI struct {
 	errorBus   <-chan error
 }
 
-func NewKucoinStreamAPI() *KucoinStreamAPI {
-	api := NewKucoinAPI()
+func NewKucoinStreamAPI(api *KucoinAPI) *KucoinStreamAPI {
 	wsConnOpts, err := api.WsConnOpts()
 
 	if err != nil {
@@ -54,7 +54,7 @@ func (s *KucoinStreamAPI) Connect() error {
 	return err
 }
 
-func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*domain.Subscription[DepthUpdateModel], error) {
+func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfaces.Subscription[DepthUpdateModel], error) {
 	ch := make(chan DepthUpdateModel)
 	topic := fmt.Sprintf("/market/level2:%s", strings.ToUpper(symbol.Join("-")))
 	m := kucoin.NewSubscribeMessage(topic, false)
@@ -74,11 +74,26 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*domain.
 		}
 	}()
 
-	return &domain.Subscription[DepthUpdateModel]{
+	return &interfaces.Subscription[DepthUpdateModel]{
 		Stream: ch,
 		Topic:  topic,
 		Unsubscribe: func() {
 			s.wc.Unsubscribe(kucoin.NewUnsubscribeMessage(topic, false))
 		},
 	}, err
+}
+
+func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
+	om := NewOrderbookMaintainer(NewKucoinAPI(), s)
+
+	result := om.CreareOrderBook(symbol)
+	if result.Err != nil {
+		return result
+	}
+
+	return &interfaces.CreareOrderBookResult{
+		OrderBook: result.OrderBook,
+		Snapshot:  result.Snapshot,
+		Err:       nil,
+	}
 }

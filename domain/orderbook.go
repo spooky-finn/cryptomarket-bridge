@@ -3,7 +3,6 @@ package domain
 import (
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -35,7 +34,9 @@ type OrderBook struct {
 	LastUpdateID   int64
 	LastUpdateTime int64
 
-	updateMx sync.Mutex
+	// MessageBus chan interface{}
+	OnSnapshotRecieved chan *OrderBookSnapshot
+	// updateMx *sync.Mutex
 }
 
 func NewOrderBook(provider string, symbol *MarketSymbol, snapshot *OrderBookSnapshot) *OrderBook {
@@ -54,8 +55,8 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 	updateBids := parsePriceLevel(update.Bids)
 
 	// TODO: is mutex here necessary?
-	ob.updateMx.Lock()
-	defer ob.updateMx.Unlock()
+	// ob.updateMx.Lock()
+	// defer ob.updateMx.Unlock()
 
 	if update.LastUpdateID <= ob.LastUpdateID {
 		return
@@ -71,24 +72,32 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 	ob.updateDepth(updateBids, false)
 }
 
-func (ob *OrderBook) TakeSnapshot() *OrderBookSnapshot {
-	ob.updateMx.Lock()
-	defer ob.updateMx.Unlock()
+func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
+	bids := make([][]float64, len(ob.Bids))
+	asks := make([][]float64, len(ob.Asks))
+
+	copy(bids, ob.Bids)
+	copy(asks, ob.Asks)
+
+	if limit > 0 {
+		bids = bids[:limit]
+		asks = asks[:limit]
+	}
 
 	return &OrderBookSnapshot{
 		LastUpdateId: ob.LastUpdateID,
-		Bids:         serializePriceLevel(ob.Bids),
-		Asks:         serializePriceLevel(ob.Asks),
+		Bids:         serializePriceLevel(bids),
+		Asks:         serializePriceLevel(asks),
 	}
 }
 
 func (ob *OrderBook) updateDepth(updateDepth [][]float64, isAsks bool) {
-	var temp [][]float64
+	var depth [][]float64
 
 	if isAsks {
-		temp = ob.Asks
+		depth = ob.Asks
 	} else {
-		temp = ob.Bids
+		depth = ob.Bids
 	}
 
 	for _, level := range updateDepth {
@@ -97,41 +106,45 @@ func (ob *OrderBook) updateDepth(updateDepth [][]float64, isAsks bool) {
 
 		if quantity == 0 {
 			// remove price level
-			for i, level := range temp {
+			for i, level := range depth {
 				if level[0] == price {
-					temp[i] = temp[len(temp)-1]
-					temp = temp[:len(temp)-1]
+					depth[i] = depth[len(depth)-1]
+					depth = depth[:len(depth)-1]
 					break
 				}
 			}
 		} else {
 			// if price level exists, update quantity
 			// otherwise, add price level
-			for i, level := range temp {
+			updated := false
+			for i, level := range depth {
 				if level[0] == price {
-					temp[i][1] = quantity
+					depth[i][1] = quantity
+					updated = true
 					break
 				}
 			}
 
-			temp = append(temp, []float64{price, quantity})
+			if !updated {
+				depth = append(depth, []float64{price, quantity})
+			}
 		}
 	}
 
 	if isAsks {
-		sort.Slice(temp, func(i, j int) bool {
-			return temp[i][0] < temp[j][0]
+		sort.Slice(depth, func(i, j int) bool {
+			return depth[i][0] < depth[j][0]
 		})
 	} else {
-		sort.Slice(temp, func(i, j int) bool {
-			return temp[i][0] > temp[j][0]
+		sort.Slice(depth, func(i, j int) bool {
+			return depth[i][0] > depth[j][0]
 		})
 	}
 
 	if isAsks {
-		ob.Asks = temp
+		ob.Asks = depth
 	} else {
-		ob.Bids = temp
+		ob.Bids = depth
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 var baseEndpoints = []string{
@@ -34,7 +35,7 @@ func NewBinanceStreamAPI(client *BinanceStreamClient) *BinanceStreamAPI {
 	}
 }
 
-func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *domain.Subscription[Message[DepthUpdateData]] {
+func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *interfaces.Subscription[Message[DepthUpdateData]] {
 	topic := fmt.Sprintf("%s@depth", symbol.Join(""))
 	subscribtion := bs.client.Subscribe(topic)
 
@@ -54,9 +55,23 @@ func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *domain
 		}
 	}()
 
-	return &domain.Subscription[Message[DepthUpdateData]]{
+	return &interfaces.Subscription[Message[DepthUpdateData]]{
 		Stream:      s,
 		Unsubscribe: subscribtion.Unsubscribe,
 		Topic:       topic,
 	}
+}
+
+func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
+	om := NewOrderbookMaintainer(
+		NewBinanceAPI(),
+		bs,
+	)
+
+	result := om.CreareOrderBook(symbol)
+	if result.Err != nil {
+		return result
+	}
+
+	return result
 }

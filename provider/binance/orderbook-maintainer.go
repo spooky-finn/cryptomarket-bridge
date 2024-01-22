@@ -1,11 +1,11 @@
 package binance
 
 import (
-	"log"
 	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 type OrderbookMaintainer struct {
@@ -25,19 +25,25 @@ func NewOrderbookMaintainer(api *BinanceAPI, stream *BinanceStreamAPI) *Orderboo
 	}
 }
 
-func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) (*domain.OrderBook, error) {
+func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
 	firstUpd := m.subscribeDepthUpdate(symbol)
 	<-firstUpd
 
 	snapshot, err := m.api.OrderBookSnapshot(symbol, 5000)
 	if err != nil {
-		return nil, err
+		return &interfaces.CreareOrderBookResult{
+			Err: err,
+		}
 	}
 
 	orderbook := domain.NewOrderBook("binance", symbol, snapshot)
-
 	go m.updateSelector(orderbook)
-	return orderbook, nil
+
+	return &interfaces.CreareOrderBookResult{
+		OrderBook: orderbook,
+		Snapshot:  snapshot,
+		Err:       nil,
+	}
 }
 
 func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
@@ -64,9 +70,9 @@ func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
 
 			if firstUpdateApplied {
 				// While listening to the stream, each new event's U should be equal to the previous event's u+1
-				if update.Data.FirstUpdateId != orderbook.LastUpdateID+1 {
-					log.Fatalf("binance: orderbook maintainer: not sequential update: %d != %d+1\n", update.Data.FirstUpdateId, orderbook.LastUpdateID)
-				}
+				// if update.Data.FirstUpdateId != orderbook.LastUpdateID+1 {
+				// 	log.Fatalf("binance: orderbook maintainer: not sequential update: %d != %d+1\n", update.Data.FirstUpdateId, orderbook.LastUpdateID)
+				// }
 
 				orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
 					update.Data.Bids, update.Data.Asks, update.Data.FinalUpdateId,

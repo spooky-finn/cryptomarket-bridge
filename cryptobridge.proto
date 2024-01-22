@@ -1,0 +1,25 @@
+syntax = "proto3";
+option go_package = "./cryptobridge";
+
+package CryptoBridge;
+
+service MarketDataService {
+    rpc GetOrderBookSnapshot(GetOrderBookSnapshotRequest) returns (GetOrderBookSnapshotResponse) {}
+}
+
+message GetOrderBookSnapshotRequest {
+    string provider = 1;
+    string market = 2;
+    string maxDepth = 3;
+}
+
+message GetOrderBookSnapshotResponse {
+    repeated OrderBookLevel bids = 1;
+    repeated OrderBookLevel asks = 2;
+}
+
+message OrderBookLevel {
+    string price = 1;
+    string qty = 2;
+}
+
