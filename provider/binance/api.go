@@ -13,6 +13,8 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
+var logger = log.New(log.Writer(), "[binance]", log.LstdFlags)
+
 const ENDPOINT = "wss://ws-api.binance.com:443/ws-api/v3"
 
 // Get OrderBookSnapshot (Depth)
@@ -28,7 +30,7 @@ type GenericMessage[T any] struct {
 }
 
 func NewBinanceAPI() *BinanceAPI {
-	log.Println("instantiating binance websocket api")
+	logger.Println("instantiating binance websocket api")
 	instance := &BinanceAPI{
 		in: make(chan []byte),
 	}
@@ -49,7 +51,7 @@ func NewBinanceAPI() *BinanceAPI {
 }
 
 func (api *BinanceAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int) (*domain.OrderBookSnapshot, error) {
-	log.Printf("getting order book snapshot for %s", symbol)
+	logger.Printf("request for  order book snapshot to the provider for %s", symbol)
 	reqId := getRandomReqID()
 
 	// params is a object of symbol and limit
@@ -87,7 +89,7 @@ func (api *BinanceAPI) listener(conn *websocket.Conn) {
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println(err)
+			logger.Println(err)
 			return
 		}
 		api.in <- message

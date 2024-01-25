@@ -3,6 +3,7 @@ package kucoin
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -11,13 +12,15 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
-type KucoinAPI struct {
+var logger = log.New(log.Writer(), "[kucoin]", log.LstdFlags)
+
+type KucoinHttpAPI struct {
 	endpoint   string
 	apiService *kucoin.ApiService
 }
 
-func NewKucoinAPI() *KucoinAPI {
-	return &KucoinAPI{
+func NewKucoinAPI() *KucoinHttpAPI {
+	return &KucoinHttpAPI{
 		endpoint: os.Getenv("KUCOIN_BASE_URL"),
 		apiService: kucoin.NewApiService(
 			kucoin.ApiKeyOption(os.Getenv("KUCOIN_API_KEY")),
@@ -45,7 +48,7 @@ type OrderBookSnapshot struct {
 	Asks     [][]string `json:"asks"`
 }
 
-func (api *KucoinAPI) WsConnOpts() (*kucoin.WebSocketTokenModel, error) {
+func (api *KucoinHttpAPI) WsConnOpts() (*kucoin.WebSocketTokenModel, error) {
 	resp, err := api.apiService.WebSocketPublicToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ws connection options: %w", err)
@@ -60,7 +63,7 @@ func (api *KucoinAPI) WsConnOpts() (*kucoin.WebSocketTokenModel, error) {
 	return data, nil
 }
 
-func (api *KucoinAPI) OrderBookSnapshot(symbol *domain.MarketSymbol) (*domain.OrderBookSnapshot, error) {
+func (api *KucoinHttpAPI) OrderBookSnapshot(symbol *domain.MarketSymbol) (*domain.OrderBookSnapshot, error) {
 	s := strings.ToUpper(symbol.Join("-"))
 	resp, err := api.apiService.AggregatedFullOrderBookV3(s)
 	if err != nil {

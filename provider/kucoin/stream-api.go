@@ -3,7 +3,6 @@ package kucoin
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/Kucoin/kucoin-go-sdk"
@@ -18,7 +17,7 @@ type KucoinStreamAPI struct {
 	errorBus   <-chan error
 }
 
-func NewKucoinStreamAPI(api *KucoinAPI) *KucoinStreamAPI {
+func NewKucoinStreamAPI(api *KucoinHttpAPI) *KucoinStreamAPI {
 	wsConnOpts, err := api.WsConnOpts()
 
 	if err != nil {
@@ -44,11 +43,14 @@ type OrderBookChanges struct {
 }
 
 func (s *KucoinStreamAPI) Connect() error {
+	logger.Println("connecting to websocket")
+
 	bus, errorBus, err := s.wc.Connect()
 	if err != nil {
 		return fmt.Errorf("failed to connect to kucoin websocket: %w", err)
 	}
 
+	logger.Println("connected to websocket")
 	s.messageBus = bus
 	s.errorBus = errorBus
 	return err
@@ -66,7 +68,7 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfa
 				data := &DepthUpdateModel{}
 
 				if err := json.Unmarshal(msg.RawData, data); err != nil {
-					log.Printf("kucoin: failed to unmarshal message: %s\n", err.Error())
+					logger.Printf("kucoin: failed to unmarshal message: %s\n", err.Error())
 				}
 
 				ch <- *data

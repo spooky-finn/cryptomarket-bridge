@@ -16,8 +16,9 @@ import (
 const (
 	binanceDefaultWebsocketEndpoint = "wss://stream.binance.com:9443/stream"
 	pingDelay                       = time.Minute * 9
-	logTag                          = "binance-stream-client"
 )
+
+// var logger = log.New(log.Writer(), "[binance-stream-client] ", log.LstdFlags)
 
 type Message[T any] struct {
 	Stream string `json:"stream"`
@@ -54,7 +55,7 @@ func NewBinanceStreamClient() *BinanceStreamClient {
 }
 
 func (c *BinanceStreamClient) Connect() error {
-	log.Printf("[%s] connecting to the %s \n", logTag, binanceDefaultWebsocketEndpoint)
+	logger.Println("connecting to websocket")
 
 	Dialer := websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
@@ -97,7 +98,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 		subscriberCount: 1,
 	}
 
-	log.Printf("[%s] subscribing to the %s \n", logTag, topic)
+	logger.Println("subscribing to the ", topic)
 
 	err := c.conn.WriteJSON(ReqMessage{
 		Method: "SUBSCRIBE",
@@ -119,7 +120,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 }
 
 func (c *BinanceStreamClient) unsubscribe(topic string) error {
-	log.Printf("[%s] unsubscribing from the %s \n", logTag, topic)
+	logger.Println("unsubscribing to the ", topic)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()

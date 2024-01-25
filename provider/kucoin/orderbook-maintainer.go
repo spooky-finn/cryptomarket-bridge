@@ -11,17 +11,17 @@ import (
 )
 
 type OrderbookMaintainer struct {
-	api    *KucoinAPI
-	stream *KucoinStreamAPI
+	httpAPI   *KucoinHttpAPI
+	streamAPI *KucoinStreamAPI
 
 	depthUpdateQueue deque.Deque[DepthUpdateModel]
 	done             chan struct{}
 }
 
-func NewOrderbookMaintainer(api *KucoinAPI, stream *KucoinStreamAPI) *OrderbookMaintainer {
+func NewOrderbookMaintainer(api *KucoinHttpAPI, stream *KucoinStreamAPI) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
-		api:    api,
-		stream: stream,
+		httpAPI:   api,
+		streamAPI: stream,
 
 		depthUpdateQueue: deque.Deque[DepthUpdateModel]{},
 	}
@@ -32,7 +32,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *inte
 	firstUpd := m.subscribe(symbol)
 	<-firstUpd
 
-	snapshot, err := m.api.OrderBookSnapshot(symbol)
+	snapshot, err := m.httpAPI.OrderBookSnapshot(symbol)
 	if err != nil {
 		return &interfaces.CreareOrderBookResult{
 			Err: err,
@@ -50,7 +50,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *inte
 }
 
 func (m *OrderbookMaintainer) Stop() {
-	m.stream.wc.Stop()
+	m.streamAPI.wc.Stop()
 	close(m.done)
 }
 
@@ -117,7 +117,7 @@ func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
 
 func (m *OrderbookMaintainer) subscribe(symbol *domain.MarketSymbol) <-chan time.Time {
 	t := time.NewTimer(3 * time.Second)
-	subscription, err := m.stream.DepthDiffStream(symbol)
+	subscription, err := m.streamAPI.DepthDiffStream(symbol)
 	if err != nil {
 		panic("error while subscribing to depth update stream  " + err.Error())
 	}

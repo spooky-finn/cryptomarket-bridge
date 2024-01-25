@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
@@ -30,7 +29,6 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 		return o.createOrderBook(provider, symbol)
 	}
 
-	fmt.Println("taking snapshot from orderbook ", symbol.String(), provider)
 	snapshot := orderbook.TakeSnapshot(limit)
 	return snapshot, nil
 }
