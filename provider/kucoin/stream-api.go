@@ -43,14 +43,12 @@ type OrderBookChanges struct {
 }
 
 func (s *KucoinStreamAPI) Connect() error {
-	logger.Println("connecting to websocket")
-
 	bus, errorBus, err := s.wc.Connect()
 	if err != nil {
 		return fmt.Errorf("failed to connect to kucoin websocket: %w", err)
 	}
 
-	logger.Println("connected to websocket")
+	logger.Println("connected to the kucoin stream websocket")
 	s.messageBus = bus
 	s.errorBus = errorBus
 	return err
@@ -86,9 +84,9 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfa
 }
 
 func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
-	om := NewOrderbookMaintainer(NewKucoinAPI(), s)
+	om := NewOrderbookMaintainer(NewKucoinHttpAPI(), s)
 
-	result := om.CreareOrderBook(symbol)
+	result := om.CreareOrderBook(symbol, 5000)
 	if result.Err != nil {
 		return result
 	}

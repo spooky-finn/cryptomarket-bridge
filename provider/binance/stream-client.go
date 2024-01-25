@@ -18,8 +18,6 @@ const (
 	pingDelay                       = time.Minute * 9
 )
 
-// var logger = log.New(log.Writer(), "[binance-stream-client] ", log.LstdFlags)
-
 type Message[T any] struct {
 	Stream string `json:"stream"`
 	Data   T      `json:"data"`
@@ -51,12 +49,11 @@ func NewBinanceStreamClient() *BinanceStreamClient {
 	return &BinanceStreamClient{
 		conn:          nil,
 		subscriptions: make(map[string]*SubscribtionEntry),
+		mu:            sync.Mutex{},
 	}
 }
 
 func (c *BinanceStreamClient) Connect() error {
-	logger.Println("connecting to websocket")
-
 	Dialer := websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 5 * time.Second,
@@ -69,6 +66,7 @@ func (c *BinanceStreamClient) Connect() error {
 		return err
 	}
 	c.conn = conn
+	logger.Println("connected to binance stream websocket")
 
 	go c.listenConnection()
 	return nil
@@ -99,7 +97,6 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 	}
 
 	logger.Println("subscribing to the ", topic)
-
 	err := c.conn.WriteJSON(ReqMessage{
 		Method: "SUBSCRIBE",
 		ReqId:  getRandomReqID(),
@@ -121,9 +118,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 
 func (c *BinanceStreamClient) unsubscribe(topic string) error {
 	logger.Println("unsubscribing to the ", topic)
-
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	if c.subscriptions[topic].subscriberCount > 1 {
 		c.subscriptions[topic].subscriberCount -= 1
@@ -132,6 +127,7 @@ func (c *BinanceStreamClient) unsubscribe(topic string) error {
 		delete(c.subscriptions, topic)
 	}
 
+	c.mu.Unlock()
 	err := c.conn.WriteJSON(ReqMessage{
 		Method: "UNSUBSCRIBE",
 		ReqId:  getRandomReqID(),
@@ -166,6 +162,7 @@ func (c *BinanceStreamClient) listenConnection() {
 		// FIXME: handle log of ack message
 		// if message have id then it is a response to a subscription
 		if multiStreamData["id"] != nil {
+			c.mu.Lock()
 			id := int(multiStreamData["id"].(float64))
 			entry, ok := c.subscriptions[fmt.Sprintf("%v", id)]
 			if ok {
@@ -174,11 +171,14 @@ func (c *BinanceStreamClient) listenConnection() {
 			}
 
 			delete(c.subscriptions, fmt.Sprintf("%v", id))
+			c.mu.Unlock()
 		}
 
 		if multiStreamData["stream"] != nil {
 			topic := multiStreamData["stream"].(string)
+			c.mu.Lock()
 			entry, ok := c.subscriptions[topic]
+			c.mu.Unlock()
 			if ok {
 				entry.ch <- msg
 			}

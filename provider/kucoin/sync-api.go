@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Kucoin/kucoin-go-sdk"
+	pb "github.com/spooky-finn/go-cryptomarkets-bridge/cryptobridge"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
@@ -19,7 +20,7 @@ type KucoinHttpAPI struct {
 	apiService *kucoin.ApiService
 }
 
-func NewKucoinAPI() *KucoinHttpAPI {
+func NewKucoinHttpAPI() *KucoinHttpAPI {
 	return &KucoinHttpAPI{
 		endpoint: os.Getenv("KUCOIN_BASE_URL"),
 		apiService: kucoin.NewApiService(
@@ -63,7 +64,7 @@ func (api *KucoinHttpAPI) WsConnOpts() (*kucoin.WebSocketTokenModel, error) {
 	return data, nil
 }
 
-func (api *KucoinHttpAPI) OrderBookSnapshot(symbol *domain.MarketSymbol) (*domain.OrderBookSnapshot, error) {
+func (api *KucoinHttpAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int) (*domain.OrderBookSnapshot, error) {
 	s := strings.ToUpper(symbol.Join("-"))
 	resp, err := api.apiService.AggregatedFullOrderBookV3(s)
 	if err != nil {
@@ -81,6 +82,7 @@ func (api *KucoinHttpAPI) OrderBookSnapshot(symbol *domain.MarketSymbol) (*domai
 	}
 
 	domainSnapshot := &domain.OrderBookSnapshot{
+		Source:       pb.OrderBookSource_Provider,
 		LastUpdateId: int64(lastUpdId),
 		Bids:         data.Bids,
 		Asks:         data.Asks,

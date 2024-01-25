@@ -7,14 +7,16 @@ import (
 )
 
 type APIResolver struct {
+	KucoinHttpApi    *kucoin.KucoinHttpAPI
 	KucoinStreamAPI  *kucoin.KucoinStreamAPI
+	BinanceHttpAPI   *binance.BinanceAPI
 	BinanceStreamAPI *binance.BinanceStreamAPI
 }
 
 func NewAPIResolver() *APIResolver {
 	binanceStreamClient := binance.NewBinanceStreamClient()
-	kucoinApi := kucoin.NewKucoinAPI()
-	KucoinStreamAPI := kucoin.NewKucoinStreamAPI(kucoinApi)
+	kucoinHttpApi := kucoin.NewKucoinHttpAPI()
+	KucoinStreamAPI := kucoin.NewKucoinStreamAPI(kucoinHttpApi)
 
 	if err := KucoinStreamAPI.Connect(); err != nil {
 		panic("failed to connect to kucoin stream: " + err.Error())
@@ -25,7 +27,9 @@ func NewAPIResolver() *APIResolver {
 	}
 
 	return &APIResolver{
+		KucoinHttpApi:    kucoinHttpApi,
 		KucoinStreamAPI:  KucoinStreamAPI,
+		BinanceHttpAPI:   binance.NewBinanceAPI(),
 		BinanceStreamAPI: binance.NewBinanceStreamAPI(binanceStreamClient),
 	}
 }
@@ -36,6 +40,17 @@ func (a *APIResolver) ByProvider(provider string) interfaces.ProviderStreamAPI {
 		return a.KucoinStreamAPI
 	case "binance":
 		return a.BinanceStreamAPI
+	}
+
+	panic("unknown provider: " + provider)
+}
+
+func (a *APIResolver) HttpApi(provider string) interfaces.ProviderHttpAPI {
+	switch provider {
+	case "kucoin":
+		return a.KucoinHttpApi
+	case "binance":
+		return a.BinanceHttpAPI
 	}
 
 	panic("unknown provider: " + provider)

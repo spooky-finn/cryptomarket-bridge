@@ -27,12 +27,12 @@ func NewOrderbookMaintainer(api *KucoinHttpAPI, stream *KucoinStreamAPI) *Orderb
 	}
 }
 
-func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
+func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit int) *interfaces.CreareOrderBookResult {
 	log.Printf("creating orderbook for %s on kucoin", symbol.String())
 	firstUpd := m.subscribe(symbol)
 	<-firstUpd
 
-	snapshot, err := m.httpAPI.OrderBookSnapshot(symbol)
+	snapshot, err := m.httpAPI.OrderBookSnapshot(symbol, limit)
 	if err != nil {
 		return &interfaces.CreareOrderBookResult{
 			Err: err,

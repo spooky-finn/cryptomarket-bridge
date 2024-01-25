@@ -6,16 +6,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
+	pb "github.com/spooky-finn/go-cryptomarkets-bridge/cryptobridge"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
 var logger = log.New(log.Writer(), "[binance]", log.LstdFlags)
 
-const ENDPOINT = "wss://ws-api.binance.com:443/ws-api/v3"
+const ENDPOINT = ""
 
 // Get OrderBookSnapshot (Depth)
 type BinanceAPI struct {
@@ -40,7 +42,8 @@ func NewBinanceAPI() *BinanceAPI {
 		HandshakeTimeout: 5 * time.Second,
 	}
 
-	conn, _, err := Dialer.Dial(ENDPOINT, nil)
+	endpoint := os.Getenv("BINANCE_STREAM_ENDPOINT")
+	conn, _, err := Dialer.Dial(endpoint, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -51,7 +54,6 @@ func NewBinanceAPI() *BinanceAPI {
 }
 
 func (api *BinanceAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int) (*domain.OrderBookSnapshot, error) {
-	logger.Printf("request for  order book snapshot to the provider for %s", symbol)
 	reqId := getRandomReqID()
 
 	// params is a object of symbol and limit
@@ -82,7 +84,14 @@ func (api *BinanceAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int)
 		return nil, err
 	}
 
-	return &response.Result, nil
+	snapshot := &domain.OrderBookSnapshot{
+		Source:       pb.OrderBookSource_Provider,
+		LastUpdateId: response.Result.LastUpdateId,
+		Bids:         response.Result.Bids,
+		Asks:         response.Result.Asks,
+	}
+
+	return snapshot, nil
 }
 
 func (api *BinanceAPI) listener(conn *websocket.Conn) {

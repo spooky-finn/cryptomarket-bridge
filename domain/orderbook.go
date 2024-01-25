@@ -1,15 +1,20 @@
 package domain
 
 import (
+	"log"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
+
+	pb "github.com/spooky-finn/go-cryptomarkets-bridge/cryptobridge"
 )
 
 type OrderBookSnapshot struct {
-	LastUpdateId int64      `json:"lastUpdateId"`
-	Bids         [][]string `json:"bids"`
-	Asks         [][]string `json:"asks"`
+	Source       pb.OrderBookSource `json:"source"`
+	LastUpdateId int64              `json:"lastUpdateId"`
+	Bids         [][]string         `json:"bids"`
+	Asks         [][]string         `json:"asks"`
 }
 
 type OrderBookUpdate struct {
@@ -36,7 +41,7 @@ type OrderBook struct {
 
 	// MessageBus chan interface{}
 	OnSnapshotRecieved chan *OrderBookSnapshot
-	// updateMx *sync.Mutex
+	updateMx           *sync.Mutex
 }
 
 func NewOrderBook(provider string, symbol *MarketSymbol, snapshot *OrderBookSnapshot) *OrderBook {
@@ -47,6 +52,8 @@ func NewOrderBook(provider string, symbol *MarketSymbol, snapshot *OrderBookSnap
 		Bids:           parsePriceLevel(snapshot.Bids),
 		LastUpdateID:   snapshot.LastUpdateId,
 		LastUpdateTime: time.Now().Unix(),
+
+		updateMx: &sync.Mutex{},
 	}
 }
 
@@ -55,8 +62,8 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 	updateBids := parsePriceLevel(update.Bids)
 
 	// TODO: is mutex here necessary?
-	// ob.updateMx.Lock()
-	// defer ob.updateMx.Unlock()
+	ob.updateMx.Lock()
+	defer ob.updateMx.Unlock()
 
 	if update.LastUpdateID <= ob.LastUpdateID {
 		return
@@ -70,9 +77,14 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 
 	ob.updateDepth(updateAsks, true)
 	ob.updateDepth(updateBids, false)
+	log.Printf("update applied for %s\n", ob.Symbol.Join(""))
 }
 
 func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
+	// mutex
+	ob.updateMx.Lock()
+	defer ob.updateMx.Unlock()
+
 	bids := make([][]float64, len(ob.Bids))
 	asks := make([][]float64, len(ob.Asks))
 
@@ -85,6 +97,7 @@ func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
 	}
 
 	return &OrderBookSnapshot{
+		Source:       pb.OrderBookSource_LocalOrderBook,
 		LastUpdateId: ob.LastUpdateID,
 		Bids:         serializePriceLevel(bids),
 		Asks:         serializePriceLevel(asks),

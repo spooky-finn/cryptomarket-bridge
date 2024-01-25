@@ -9,7 +9,7 @@ import (
 )
 
 func TestGerWsConnOpts(t *testing.T) {
-	api := NewKucoinAPI()
+	api := NewKucoinHttpAPI()
 
 	opts, err := api.WsConnOpts()
 	if err != nil {
@@ -25,11 +25,11 @@ func TestGetOrderBookSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	api := NewKucoinAPI()
+	api := NewKucoinHttpAPI()
 
 	symbol, _ := domain.NewMarketSymbol("BTC", "USDT")
 
-	snapshot, err := api.OrderBookSnapshot(symbol)
+	snapshot, err := api.OrderBookSnapshot(symbol, 5)
 	if err != nil {
 		t.Fatal(err)
 	}

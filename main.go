@@ -85,8 +85,9 @@ func (s *server) GetOrderBookSnapshot(ctx context.Context, in *pb.GetOrderBookSn
 	}
 
 	return &pb.GetOrderBookSnapshotResponse{
-		Bids: bids,
-		Asks: asks,
+		Source: snapshot.Source,
+		Bids:   bids,
+		Asks:   asks,
 	}, nil
 }
 

@@ -14,8 +14,9 @@ message GetOrderBookSnapshotRequest {
 }
 
 message GetOrderBookSnapshotResponse {
-    repeated OrderBookLevel bids = 1;
-    repeated OrderBookLevel asks = 2;
+    OrderBookSource source = 1;
+    repeated OrderBookLevel bids = 2;
+    repeated OrderBookLevel asks = 3;
 }
 
 message OrderBookLevel {
@@ -23,3 +24,7 @@ message OrderBookLevel {
     string qty = 2;
 }
 
+enum OrderBookSource {
+    Provider = 0;
+    LocalOrderBook = 1;
+}

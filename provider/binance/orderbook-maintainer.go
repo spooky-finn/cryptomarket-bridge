@@ -1,6 +1,7 @@
 package binance
 
 import (
+	"sync"
 	"time"
 
 	"github.com/gammazero/deque"
@@ -13,7 +14,9 @@ type OrderbookMaintainer struct {
 	stream *BinanceStreamAPI
 
 	depthUpdateQueue deque.Deque[Message[DepthUpdateData]]
-	done             chan struct{}
+	mu               *sync.RWMutex
+
+	done chan struct{}
 }
 
 func NewOrderbookMaintainer(api *BinanceAPI, stream *BinanceStreamAPI) *OrderbookMaintainer {
@@ -21,6 +24,7 @@ func NewOrderbookMaintainer(api *BinanceAPI, stream *BinanceStreamAPI) *Orderboo
 		api:    api,
 		stream: stream,
 
+		mu:               &sync.RWMutex{},
 		depthUpdateQueue: deque.Deque[Message[DepthUpdateData]]{},
 	}
 }
@@ -29,6 +33,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *inte
 	firstUpd := m.subscribeDepthUpdate(symbol)
 	<-firstUpd
 
+	// TODO: max limit param
 	snapshot, err := m.api.OrderBookSnapshot(symbol, 5000)
 	if err != nil {
 		return &interfaces.CreareOrderBookResult{
@@ -37,7 +42,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *inte
 	}
 
 	orderbook := domain.NewOrderBook("binance", symbol, snapshot)
-	go m.updateSelector(orderbook)
+	go m.updater(orderbook)
 
 	return &interfaces.CreareOrderBookResult{
 		OrderBook: orderbook,
@@ -46,12 +51,14 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *inte
 	}
 }
 
-func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
+func (m *OrderbookMaintainer) updater(orderbook *domain.OrderBook) {
 	firstUpdateApplied := false
 
 	for {
+		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
+			m.mu.Unlock()
 
 			// Drop any event where u is <= lastUpdateId in the snapshot
 			if update.Data.FinalUpdateId <= orderbook.LastUpdateID {
@@ -79,6 +86,7 @@ func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
 				))
 			}
 		} else {
+			m.mu.Unlock()
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -101,7 +109,9 @@ func (m *OrderbookMaintainer) subscribeDepthUpdate(symbol *domain.MarketSymbol) 
 			case <-m.done:
 				return
 			case update := <-subscribtion.Stream:
+				m.mu.Lock()
 				m.depthUpdateQueue.PushBack(update)
+				m.mu.Unlock()
 
 				if counter == 0 {
 					firstUpdate <- true

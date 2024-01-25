@@ -9,7 +9,7 @@ import (
 
 func TestKucoinStreamAPI(t *testing.T) {
 	// Create a new KucoinStreamAPI instance
-	client := NewKucoinAPI()
+	client := NewKucoinHttpAPI()
 	streamAPI := NewKucoinStreamAPI(client)
 
 	// Call Connect
