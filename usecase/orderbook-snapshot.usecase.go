@@ -53,7 +53,7 @@ func (o *OrderBookSnapshotUseCase) createOrderBook(
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	o.waitingRoom[waitingRoomKey] = STARTING
 
-	result := o.apiResolver.ByProvider(provider).GetOrderBook(symbol)
+	result := o.apiResolver.StreamApi(provider).GetOrderBook(symbol)
 	if result.Err != nil {
 		log.Fatalf("Failed to create orderbook for %s. Provider=%s. Err=%s", symbol.String(), provider, result.Err)
 		return

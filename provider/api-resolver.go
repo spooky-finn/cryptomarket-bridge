@@ -34,7 +34,7 @@ func NewAPIResolver() *APIResolver {
 	}
 }
 
-func (a *APIResolver) ByProvider(provider string) interfaces.ProviderStreamAPI {
+func (a *APIResolver) StreamApi(provider string) interfaces.ProviderStreamAPI {
 	switch provider {
 	case "kucoin":
 		return a.KucoinStreamAPI
