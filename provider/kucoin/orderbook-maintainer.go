@@ -3,11 +3,12 @@ package kucoin
 import (
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
+	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 type OrderbookMaintainer struct {
@@ -15,6 +16,7 @@ type OrderbookMaintainer struct {
 	streamAPI *KucoinStreamAPI
 
 	depthUpdateQueue deque.Deque[DepthUpdateModel]
+	mu               sync.Mutex
 	done             chan struct{}
 }
 
@@ -24,17 +26,18 @@ func NewOrderbookMaintainer(api *KucoinHttpAPI, stream *KucoinStreamAPI) *Orderb
 		streamAPI: stream,
 
 		depthUpdateQueue: deque.Deque[DepthUpdateModel]{},
+		mu:               sync.Mutex{},
 	}
 }
 
-func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit int) *interfaces.CreareOrderBookResult {
+func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit int) *i.CreareOrderBookResult {
 	log.Printf("creating orderbook for %s on kucoin", symbol.String())
 	firstUpd := m.subscribe(symbol)
 	<-firstUpd
 
 	snapshot, err := m.httpAPI.OrderBookSnapshot(symbol, limit)
 	if err != nil {
-		return &interfaces.CreareOrderBookResult{
+		return &i.CreareOrderBookResult{
 			Err: err,
 		}
 	}
@@ -42,7 +45,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 	orderbook := domain.NewOrderBook("kucoin", symbol, snapshot)
 	go m.updateSelector(orderbook)
 
-	return &interfaces.CreareOrderBookResult{
+	return &i.CreareOrderBookResult{
 		OrderBook: orderbook,
 		Snapshot:  snapshot,
 		Err:       nil,
@@ -58,8 +61,10 @@ func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
 	firstUpdateApplied := false
 
 	for {
+		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
+			m.mu.Unlock()
 
 			// FIXME: WTF WHY THIS EMTY UPDATES
 			// fmt.Println("update", update)
@@ -111,6 +116,8 @@ func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
 				))
 			}
 
+		} else {
+			m.mu.Unlock()
 		}
 	}
 }
@@ -128,7 +135,9 @@ func (m *OrderbookMaintainer) subscribe(symbol *domain.MarketSymbol) <-chan time
 			case <-m.done:
 				return
 			case update := <-subscription.Stream:
+				m.mu.Lock()
 				m.depthUpdateQueue.PushBack(update)
+				m.mu.Unlock()
 			}
 		}
 	}()

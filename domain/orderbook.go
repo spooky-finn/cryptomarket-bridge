@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"log"
 	"sort"
 	"strconv"
 	"sync"
@@ -77,7 +76,6 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 
 	ob.updateDepth(updateAsks, true)
 	ob.updateDepth(updateBids, false)
-	log.Printf("update applied for %s\n", ob.Symbol.Join(""))
 }
 
 func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
