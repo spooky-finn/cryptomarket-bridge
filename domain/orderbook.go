@@ -79,7 +79,6 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 }
 
 func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
-	// mutex
 	ob.updateMx.Lock()
 	defer ob.updateMx.Unlock()
 

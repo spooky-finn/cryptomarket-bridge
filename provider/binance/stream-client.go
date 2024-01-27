@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/recws-org/recws"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
@@ -40,7 +40,7 @@ type ReqMessageAck struct {
 }
 
 type BinanceStreamClient struct {
-	conn          *websocket.Conn
+	conn          *recws.RecConn
 	subscriptions map[string]*SubscribtionEntry
 	mu            sync.Mutex
 }
@@ -54,17 +54,17 @@ func NewBinanceStreamClient() *BinanceStreamClient {
 }
 
 func (c *BinanceStreamClient) Connect() error {
-	Dialer := websocket.Dialer{
+	conn := &recws.RecConn{
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 5 * time.Second,
+		KeepAliveTimeout: pingDelay,
+		Conn:             nil,
+		NonVerbose:       false,
 	}
 
-	conn, _, err := Dialer.Dial(binanceDefaultWebsocketEndpoint, nil)
+	conn.Dial(binanceDefaultWebsocketEndpoint, nil)
 	conn.SetReadLimit(655350)
 
-	if err != nil {
-		return err
-	}
 	c.conn = conn
 	logger.Println("connected to binance stream websocket")
 
@@ -75,6 +75,14 @@ func (c *BinanceStreamClient) Connect() error {
 func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[]byte] {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// if connection closed then reconnect
+	if c.conn.Conn.UnderlyingConn() == nil {
+		err := c.Connect()
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	entry, ok := c.subscriptions[topic]
 	if ok {
@@ -142,7 +150,7 @@ func (c *BinanceStreamClient) unsubscribe(topic string) error {
 }
 
 func (c *BinanceStreamClient) Disconnect() error {
-	return c.conn.Close()
+	return c.conn.Conn.Close()
 }
 
 func (c *BinanceStreamClient) listenConnection() {

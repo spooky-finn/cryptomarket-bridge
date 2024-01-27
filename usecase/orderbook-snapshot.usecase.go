@@ -3,6 +3,7 @@ package usecase
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
@@ -10,6 +11,8 @@ import (
 )
 
 const STARTING = "starting"
+
+var logger = log.New(os.Stdout, "[orderbook-snapshot-usecase] ", log.LstdFlags)
 
 type OrderBookSnapshotUseCase struct {
 	apiResolver interfaces.ApiResolver
@@ -68,7 +71,7 @@ func (o *OrderBookSnapshotUseCase) createOrderBook(
 
 	o.storage.Add(provider, symbol, result.OrderBook)
 	delete(o.waitingRoom, waitingRoomKey)
-	log.Printf("Orderbook snapshot for %s is added for to the runtime storage. Provider=%s", symbol.String(), provider)
+	logger.Printf("Orderbook snapshot for %s is added for to the runtime storage. Provider=%s", symbol.String(), provider)
 }
 
 func (o *OrderBookSnapshotUseCase) getWaitingRoomKey(provider string, symbol *domain.MarketSymbol) string {
