@@ -3,6 +3,7 @@ package usecase
 import (
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
@@ -15,6 +16,7 @@ type OrderBookSnapshotUseCase struct {
 	storage     *domain.OrderBookStorage
 
 	waitingRoom map[string]string
+	mu          sync.RWMutex
 }
 
 func NewOrderBookSnapshotUseCase(
@@ -32,6 +34,9 @@ func NewOrderBookSnapshotUseCase(
 func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 	provider string, symbol *domain.MarketSymbol, limit int,
 ) (*domain.OrderBookSnapshot, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	if _, ok := o.waitingRoom[waitingRoomKey]; ok {
 		return o.apiResolver.HttpApi(provider).OrderBookSnapshot(symbol, limit)
@@ -50,12 +55,14 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 func (o *OrderBookSnapshotUseCase) createOrderBook(
 	provider string, symbol *domain.MarketSymbol,
 ) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	o.waitingRoom[waitingRoomKey] = STARTING
 
 	result := o.apiResolver.StreamApi(provider).GetOrderBook(symbol)
 	if result.Err != nil {
-		log.Fatalf("Failed to create orderbook for %s. Provider=%s. Err=%s", symbol.String(), provider, result.Err)
 		return
 	}
 

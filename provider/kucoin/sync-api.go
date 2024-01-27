@@ -81,13 +81,21 @@ func (api *KucoinHttpAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit i
 		return nil, fmt.Errorf("failed to convert sequence to int: %w, response: %s", err, resp.RawData)
 	}
 
-	domainSnapshot := &domain.OrderBookSnapshot{
+	if len(data.Asks) > limit {
+		data.Asks = data.Asks[:limit]
+	}
+
+	if len(data.Bids) > limit {
+		data.Bids = data.Bids[:limit]
+	}
+
+	obSnapshot := &domain.OrderBookSnapshot{
 		Source:       pb.OrderBookSource_Provider,
 		LastUpdateId: int64(lastUpdId),
 		Bids:         data.Bids,
 		Asks:         data.Asks,
 	}
 
-	return domainSnapshot, nil
+	return obSnapshot, nil
 
 }

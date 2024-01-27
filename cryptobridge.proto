@@ -25,6 +25,7 @@ message OrderBookLevel {
 }
 
 enum OrderBookSource {
-    Provider = 0;
-    LocalOrderBook = 1;
+    Unknown = 0;
+    Provider = 1;
+    LocalOrderBook = 2;
 }
