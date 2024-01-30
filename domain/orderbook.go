@@ -5,15 +5,20 @@ import (
 	"strconv"
 	"sync"
 	"time"
+)
 
-	pb "github.com/spooky-finn/go-cryptomarkets-bridge/cryptobridge"
+type OrderBookSource string
+
+const (
+	OrderBookSource_Provider       OrderBookSource = "Provider"
+	OrderBookSource_LocalOrderBook OrderBookSource = "LocalOrderBook"
 )
 
 type OrderBookSnapshot struct {
-	Source       pb.OrderBookSource `json:"source"`
-	LastUpdateId int64              `json:"lastUpdateId"`
-	Bids         [][]string         `json:"bids"`
-	Asks         [][]string         `json:"asks"`
+	Source       OrderBookSource `json:"source"`
+	LastUpdateId int64           `json:"lastUpdateId"`
+	Bids         [][]string      `json:"bids"`
+	Asks         [][]string      `json:"asks"`
 }
 
 type OrderBookUpdate struct {
@@ -92,7 +97,7 @@ func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
 	asks = ob.limitDepth(asks, limit)
 
 	return &OrderBookSnapshot{
-		Source:       pb.OrderBookSource_LocalOrderBook,
+		Source:       OrderBookSource_LocalOrderBook,
 		LastUpdateId: ob.LastUpdateID,
 		Bids:         serializePriceLevel(bids),
 		Asks:         serializePriceLevel(asks),

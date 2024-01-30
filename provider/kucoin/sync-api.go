@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Kucoin/kucoin-go-sdk"
-	pb "github.com/spooky-finn/go-cryptomarkets-bridge/cryptobridge"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
@@ -90,7 +89,7 @@ func (api *KucoinHttpAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit i
 	}
 
 	obSnapshot := &domain.OrderBookSnapshot{
-		Source:       pb.OrderBookSource_Provider,
+		Source:       domain.OrderBookSource_Provider,
 		LastUpdateId: int64(lastUpdId),
 		Bids:         data.Bids,
 		Asks:         data.Asks,

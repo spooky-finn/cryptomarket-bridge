@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	pb "github.com/spooky-finn/go-cryptomarkets-bridge/cryptobridge"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
@@ -85,7 +84,7 @@ func (api *BinanceAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int)
 	}
 
 	snapshot := &domain.OrderBookSnapshot{
-		Source:       pb.OrderBookSource_Provider,
+		Source:       domain.OrderBookSource_Provider,
 		LastUpdateId: response.Result.LastUpdateId,
 		Bids:         response.Result.Bids,
 		Asks:         response.Result.Asks,
