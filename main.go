@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -56,12 +55,7 @@ func (s *server) GetOrderBookSnapshot(ctx context.Context, in *pb.GetOrderBookSn
 		return nil, fmt.Errorf("invalid market symbol %s. Correct market symbol should use / as a separator", in.Market)
 	}
 
-	maxDepth, err := strconv.ParseInt(in.MaxDepth, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid max depth %s", in.MaxDepth)
-	}
-
-	snapshot, err := s.orderbookSnapshotUseCase.GetOrderBookSnapshot(in.Provider, marketSymbol, int(maxDepth))
+	snapshot, err := s.orderbookSnapshotUseCase.GetOrderBookSnapshot(in.Provider, marketSymbol, int(in.MaxDepth))
 	if err != nil {
 		return nil, err
 	}
@@ -107,5 +101,4 @@ func main() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-
 }

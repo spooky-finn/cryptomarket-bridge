@@ -114,3 +114,34 @@ func TestSerializePriceLevel(t *testing.T) {
 	assert.Equal(t, [][]string{{"10000", "1"}, {"9900", "2"}}, result, "Result should match")
 	assert.NotEmpty(t, result, "Result should not be empty")
 }
+
+func TestLimitDepth(t *testing.T) {
+	// Call limitDepth
+	provider := "MockProvider"
+	symbol, err := NewMarketSymbol("BTC", "USDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := &OrderBookSnapshot{
+		LastUpdateId: 123,
+		Bids:         [][]string{{"10000", "1"}, {"9900", "2"}},
+		Asks:         [][]string{{"10.300", "1.5"}, {"10200", "2.5"}},
+	}
+
+	// Create a new OrderBook instance
+	ob := NewOrderBook(provider, symbol, snapshot)
+
+	bids := ob.limitDepth(ob.Bids, 3)
+	asks := ob.limitDepth(ob.Asks, 3)
+
+	assert.Equal(t, len(bids), 2, "Bids should be limited to 2")
+	assert.Equal(t, len(asks), 2, "Asks should be limited to 2")
+
+	bids = ob.limitDepth(ob.Bids, 1)
+	asks = ob.limitDepth(ob.Asks, 1)
+
+	assert.Equal(t, len(bids), 1, "Bids should be limited to 1")
+	assert.Equal(t, len(asks), 1, "Asks should be limited to 1")
+
+}

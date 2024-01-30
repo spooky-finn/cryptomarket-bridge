@@ -88,10 +88,8 @@ func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
 	copy(bids, ob.Bids)
 	copy(asks, ob.Asks)
 
-	if limit > 0 {
-		bids = bids[:limit]
-		asks = asks[:limit]
-	}
+	bids = ob.limitDepth(bids, limit)
+	asks = ob.limitDepth(asks, limit)
 
 	return &OrderBookSnapshot{
 		Source:       pb.OrderBookSource_LocalOrderBook,
@@ -99,6 +97,14 @@ func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
 		Bids:         serializePriceLevel(bids),
 		Asks:         serializePriceLevel(asks),
 	}
+}
+
+func (ob *OrderBook) limitDepth(depth [][]float64, limit int) [][]float64 {
+	if limit > 0 && len(depth) > limit {
+		return depth[:limit]
+	}
+
+	return depth
 }
 
 func (ob *OrderBook) updateDepth(updateDepth [][]float64, isAsks bool) {

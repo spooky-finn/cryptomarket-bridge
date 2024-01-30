@@ -10,7 +10,7 @@ service MarketDataService {
 message GetOrderBookSnapshotRequest {
     string provider = 1;
     string market = 2;
-    string maxDepth = 3;
+    int32 maxDepth = 3;
 }
 
 message GetOrderBookSnapshotResponse {

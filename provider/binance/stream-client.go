@@ -76,11 +76,10 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// if connection closed then reconnect
-	if c.conn.Conn.UnderlyingConn() == nil {
+	if !c.conn.IsConnected() {
 		err := c.Connect()
 		if err != nil {
-			panic(err)
+			fmt.Println("failed to connect to binance stream websocket")
 		}
 	}
 
