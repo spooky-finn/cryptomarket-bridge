@@ -9,6 +9,7 @@ import (
 
 	"github.com/joho/godotenv"
 	gen "github.com/spooky-finn/go-cryptomarkets-bridge/gen"
+	promclient "github.com/spooky-finn/go-cryptomarkets-bridge/infrastructure/prometheus"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/rpc"
 	"google.golang.org/grpc"
 )
@@ -22,6 +23,8 @@ func main() {
 	godotenv.Load()
 
 	flag.Parse()
+	go promclient.StartPromClientServer()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -37,4 +40,5 @@ func main() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+
 }

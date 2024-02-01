@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log"
 	"os"
+
+	promclient "github.com/spooky-finn/go-cryptomarkets-bridge/infrastructure/prometheus"
 )
 
 type OrderBookStorage struct {
@@ -26,6 +28,9 @@ func (o *OrderBookStorage) Add(provider string, symbol *MarketSymbol, orderBook 
 	}
 
 	o.storage[provider][symbol.String()] = orderBook
+
+	promclient.BinanceOpenOrderBookGauge.Set(float64(o.OrderBookCount("binance")))
+	promclient.KucoinOpenOrderBookGauge.Set(float64(o.OrderBookCount("kucoin")))
 }
 
 func (o *OrderBookStorage) Get(provider string, symbol *MarketSymbol) (*OrderBook, error) {

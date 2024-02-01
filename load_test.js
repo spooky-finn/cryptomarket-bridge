@@ -15,7 +15,7 @@ function rundom(min, max) {
 }
 
 const getProvider = () => {
-  const providers = [ 'binance'];
+  const providers = [ 'kucoin'];
   return providers[rundom(0, 1)];
 }
 

@@ -1,0 +1,30 @@
+version: "3.1"
+services:
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./infrastructure/prometheus/:/etc/prometheus/
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=./prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+
+
+# add a common network with host
+networks:
+  default:
+
+
+volumes:
+  grafana-storage: {}
