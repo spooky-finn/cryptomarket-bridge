@@ -10,8 +10,8 @@ import (
 )
 
 type OrderbookMaintainer struct {
-	api    *BinanceAPI
-	stream *BinanceStreamAPI
+	syncAPI   *BinanceAPI
+	streamAPI *BinanceStreamAPI
 
 	depthUpdateQueue deque.Deque[Message[DepthUpdateData]]
 	mu               *sync.RWMutex
@@ -19,10 +19,10 @@ type OrderbookMaintainer struct {
 	done chan struct{}
 }
 
-func NewOrderbookMaintainer(api *BinanceAPI, stream *BinanceStreamAPI) *OrderbookMaintainer {
+func NewOrderbookMaintainer(stream *BinanceStreamAPI) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
-		api:    api,
-		stream: stream,
+		syncAPI:   stream.syncAPI,
+		streamAPI: stream,
 
 		mu:               &sync.RWMutex{},
 		depthUpdateQueue: deque.Deque[Message[DepthUpdateData]]{},
@@ -34,7 +34,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol) *inte
 	<-firstUpd
 
 	// TODO: max limit param
-	snapshot, err := m.api.OrderBookSnapshot(symbol, 5000)
+	snapshot, err := m.syncAPI.OrderBookSnapshot(symbol, 5000)
 	if err != nil {
 		return &interfaces.CreareOrderBookResult{
 			Err: err,
@@ -94,14 +94,14 @@ func (m *OrderbookMaintainer) updater(orderbook *domain.OrderBook) {
 
 func Stop(m *OrderbookMaintainer) {
 	close(m.done)
-	_ = m.api.conn.Close()
+	_ = m.syncAPI.conn.Close()
 }
 
 // Return buffered channel which triggers on first update
 func (m *OrderbookMaintainer) subscribeDepthUpdate(symbol *domain.MarketSymbol) <-chan bool {
 	counter := 0
 	firstUpdate := make(chan bool, 1)
-	subscribtion := m.stream.DepthDiffStream(symbol)
+	subscribtion := m.streamAPI.DepthDiffStream(symbol)
 
 	go func() {
 		for {

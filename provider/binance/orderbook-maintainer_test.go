@@ -9,10 +9,11 @@ import (
 func TestCreateOrderBook(t *testing.T) {
 	streamClient := NewBinanceStreamClient()
 	streamClient.Connect()
+	syncAPI := NewBinanceAPI()
 
 	m := &OrderbookMaintainer{
-		api:    NewBinanceAPI(),
-		stream: NewBinanceStreamAPI(streamClient),
+		syncAPI:   syncAPI,
+		streamAPI: NewBinanceStreamAPI(streamClient, syncAPI),
 	}
 
 	symbol, err := domain.NewMarketSymbol("BTC", "USDT")

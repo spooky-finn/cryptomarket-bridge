@@ -14,8 +14,9 @@ var baseEndpoints = []string{
 }
 
 type BinanceStreamAPI struct {
-	endpoint string
-	client   *BinanceStreamClient
+	endpoint     string
+	streamClient *BinanceStreamClient
+	syncAPI      *BinanceAPI
 }
 
 type DepthUpdateData struct {
@@ -28,16 +29,17 @@ type DepthUpdateData struct {
 	Asks          [][]string `json:"a"`
 }
 
-func NewBinanceStreamAPI(client *BinanceStreamClient) *BinanceStreamAPI {
+func NewBinanceStreamAPI(client *BinanceStreamClient, syncAPI *BinanceAPI) *BinanceStreamAPI {
 	return &BinanceStreamAPI{
-		endpoint: baseEndpoints[0],
-		client:   client,
+		endpoint:     baseEndpoints[0],
+		streamClient: client,
+		syncAPI:      syncAPI,
 	}
 }
 
 func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *interfaces.Subscription[Message[DepthUpdateData]] {
 	topic := fmt.Sprintf("%s@depth", symbol.Join(""))
-	subscribtion := bs.client.Subscribe(topic)
+	subscribtion := bs.streamClient.Subscribe(topic)
 
 	// unmarschal the message
 	s := make(chan Message[DepthUpdateData])
@@ -63,10 +65,7 @@ func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *interf
 }
 
 func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
-	om := NewOrderbookMaintainer(
-		NewBinanceAPI(),
-		bs,
-	)
+	om := NewOrderbookMaintainer(bs)
 
 	result := om.CreareOrderBook(symbol)
 	if result.Err != nil {

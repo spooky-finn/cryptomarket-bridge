@@ -15,6 +15,7 @@ type APIResolver struct {
 
 func NewAPIResolver() *APIResolver {
 	binanceStreamClient := binance.NewBinanceStreamClient()
+	binanceSyncAPI := binance.NewBinanceAPI()
 	kucoinHttpApi := kucoin.NewKucoinHttpAPI()
 	KucoinStreamAPI := kucoin.NewKucoinStreamAPI(kucoinHttpApi)
 
@@ -29,8 +30,8 @@ func NewAPIResolver() *APIResolver {
 	return &APIResolver{
 		KucoinHttpApi:    kucoinHttpApi,
 		KucoinStreamAPI:  KucoinStreamAPI,
-		BinanceHttpAPI:   binance.NewBinanceAPI(),
-		BinanceStreamAPI: binance.NewBinanceStreamAPI(binanceStreamClient),
+		BinanceHttpAPI:   binanceSyncAPI,
+		BinanceStreamAPI: binance.NewBinanceStreamAPI(binanceStreamClient, binanceSyncAPI),
 	}
 }
 
