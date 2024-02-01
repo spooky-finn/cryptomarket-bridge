@@ -63,7 +63,7 @@ func (c *BinanceStreamClient) Connect() error {
 	}
 
 	conn.Dial(binanceDefaultWebsocketEndpoint, nil)
-	conn.SetReadLimit(655350)
+	// conn.SetReadLimit(655350)
 
 	c.conn = conn
 	logger.Println("connected to binance stream websocket")
@@ -124,8 +124,9 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 }
 
 func (c *BinanceStreamClient) unsubscribe(topic string) error {
-	logger.Println("unsubscribing to the ", topic)
+	logger.Println("unsubscribing from topic ", topic)
 	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if c.subscriptions[topic].subscriberCount > 1 {
 		c.subscriptions[topic].subscriberCount -= 1
@@ -134,7 +135,6 @@ func (c *BinanceStreamClient) unsubscribe(topic string) error {
 		delete(c.subscriptions, topic)
 	}
 
-	c.mu.Unlock()
 	err := c.conn.WriteJSON(ReqMessage{
 		Method: "UNSUBSCRIBE",
 		ReqId:  getRandomReqID(),

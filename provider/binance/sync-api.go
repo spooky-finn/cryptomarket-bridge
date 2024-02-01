@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -20,8 +21,9 @@ const ENDPOINT = ""
 
 // Get OrderBookSnapshot (Depth)
 type BinanceAPI struct {
-	conn *websocket.Conn
-	in   chan []byte
+	conn       *websocket.Conn
+	writeMutex sync.Mutex
+	in         chan []byte
 }
 
 type GenericMessage[T any] struct {
@@ -61,11 +63,13 @@ func (api *BinanceAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int)
 		"limit":  fmt.Sprintf("%d", limit),
 	}
 
+	api.writeMutex.Lock()
 	err := api.conn.WriteJSON(map[string]interface{}{
 		"method": "depth",
 		"params": params,
 		"id":     reqId,
 	})
+	api.writeMutex.Unlock()
 
 	if err != nil {
 		return nil, err

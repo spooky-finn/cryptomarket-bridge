@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/Kucoin/kucoin-go-sdk"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
@@ -11,7 +12,8 @@ import (
 )
 
 type KucoinStreamAPI struct {
-	wc *kucoin.WebSocketClient
+	wc           *kucoin.WebSocketClient
+	sendingMutex sync.Mutex
 
 	messageBus <-chan *kucoin.WebSocketDownstreamMessage
 	errorBus   <-chan error
@@ -58,7 +60,14 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfa
 	ch := make(chan DepthUpdateModel)
 	topic := fmt.Sprintf("/market/level2:%s", strings.ToUpper(symbol.Join("-")))
 	m := kucoin.NewSubscribeMessage(topic, false)
+
+	s.sendingMutex.Lock()
+	defer s.sendingMutex.Unlock()
+
 	err := s.wc.Subscribe(m)
+	if err != nil {
+		return nil, err
+	}
 
 	go func() {
 		for msg := range s.messageBus {

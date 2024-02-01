@@ -18,8 +18,7 @@ type OrderBookSnapshotUseCase struct {
 	apiResolver interfaces.ApiResolver
 	storage     *domain.OrderBookStorage
 
-	waitingRoom map[string]string
-	mu          sync.RWMutex
+	waitingRoom sync.Map
 }
 
 func NewOrderBookSnapshotUseCase(
@@ -29,7 +28,7 @@ func NewOrderBookSnapshotUseCase(
 		apiResolver: apiResolver,
 		storage:     domain.NewOrderBookStorage(),
 
-		waitingRoom: make(map[string]string),
+		waitingRoom: sync.Map{},
 	}
 }
 
@@ -37,11 +36,10 @@ func NewOrderBookSnapshotUseCase(
 func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 	provider string, symbol *domain.MarketSymbol, limit int,
 ) (*domain.OrderBookSnapshot, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
+	// If local orderbook in the initialization process, return the snapshot from the provider api.
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
-	if _, ok := o.waitingRoom[waitingRoomKey]; ok {
+	if _, ok := o.waitingRoom.Load(waitingRoomKey); ok {
+		logger.Printf("Orderbook in initializing. Providers snapshot returns. Provider=%s, Symbol=%s", provider, symbol.String())
 		return o.apiResolver.HttpApi(provider).OrderBookSnapshot(symbol, limit)
 	}
 
@@ -58,11 +56,8 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 func (o *OrderBookSnapshotUseCase) createOrderBook(
 	provider string, symbol *domain.MarketSymbol,
 ) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
-	o.waitingRoom[waitingRoomKey] = STARTING
+	o.waitingRoom.Store(waitingRoomKey, STARTING)
 
 	result := o.apiResolver.StreamApi(provider).GetOrderBook(symbol)
 	if result.Err != nil {
@@ -70,7 +65,8 @@ func (o *OrderBookSnapshotUseCase) createOrderBook(
 	}
 
 	o.storage.Add(provider, symbol, result.OrderBook)
-	delete(o.waitingRoom, waitingRoomKey)
+	o.waitingRoom.Delete(waitingRoomKey)
+
 	logger.Printf("Orderbook snapshot for %s is added for to the runtime storage. Provider=%s", symbol.String(), provider)
 }
 

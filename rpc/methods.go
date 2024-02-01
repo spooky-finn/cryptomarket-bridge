@@ -3,27 +3,32 @@ package rpc
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	gen "github.com/spooky-finn/go-cryptomarkets-bridge/gen"
 )
 
+var logger = log.New(os.Stdout, "rpc: ", log.LstdFlags)
+
 func (s *server) GetOrderBookSnapshot(ctx context.Context, in *gen.GetOrderBookSnapshotRequest) (*gen.GetOrderBookSnapshotResponse, error) {
+	logger.Printf("received request to the orderbook snapshot for %s %s \n", in.Provider, in.Market)
 	if !s.validationService.IsSupportedProvider(in.Provider) {
 		return nil, fmt.Errorf("provider %s is not supported", in.Provider)
 	}
 
 	marketSymbol, err := domain.NewMarketSymbolFromString(in.Market)
 	if err != nil {
+		logger.Printf("error parsing market symbol: %s", err)
 		return nil, fmt.Errorf("invalid market symbol %s. Correct market symbol should use / as a separator", in.Market)
 	}
 
 	snapshot, err := s.orderbookSnapshotUseCase.GetOrderBookSnapshot(in.Provider, marketSymbol, int(in.MaxDepth))
 	if err != nil {
+		logger.Printf("error getting order book snapshot: %s", err)
 		return nil, err
 	}
-
-	// fmt.Println("snapshot sending to client", snapshot)
 
 	bids := []*gen.OrderBookLevel{}
 	for _, bid := range snapshot.Bids {
@@ -41,6 +46,7 @@ func (s *server) GetOrderBookSnapshot(ctx context.Context, in *gen.GetOrderBookS
 		})
 	}
 
+	logger.Printf("returning orderbook snapshot for %s %s \n", in.Provider, in.Market)
 	return &gen.GetOrderBookSnapshotResponse{
 		Source: selectOrderBookSource(snapshot.Source),
 		Bids:   bids,
