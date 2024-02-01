@@ -5,9 +5,26 @@ import grpc from 'k6/net/grpc';
 const client = new grpc.Client();
 client.load(['.'], 'cryptobridge.proto');
 
-const data = new SharedArray('some data name', function () {
-  return JSON.parse(open('./provider-currencies.json'));
-});
+function loadData(){
+  const file = open('./provider-avail-markets.json');
+  const data = JSON.parse(file);
+  return {
+    'binance': new SharedArray('BinanceMarkets', function () {
+      return data['binance'];
+    }),
+    'kucoin': new SharedArray('KucoinMarkets', function () {
+      return data['kucoin'];
+    }),
+    'huobi': new SharedArray('HuobiMarkets', function () {
+      return data['huobi'];
+    }),
+    'gateio': new SharedArray('GateioMarkets', function () {
+      return data['gateio'];
+    }),
+  }
+}
+
+const availableMarketsData = loadData();
 
 
 function rundom(min, max) {
@@ -15,19 +32,18 @@ function rundom(min, max) {
 }
 
 const getProvider = () => {
-  const providers = [ 'kucoin'];
-  return providers[rundom(0, 1)];
+  const providersToTest = ['kucoin', 'binance'];
+  return providersToTest[rundom(0, providersToTest.length)];
 }
 
 const getMarket = (provider) => {
-  // return data[rundom(0, data.length - 1)]
-  const markets = ["btc/usdt", "trx/btc"]
-  return markets[rundom(0, markets.length) ]
+  const list = availableMarketsData[provider];
+  return list[rundom(0, list.length)]
 }
 
 export const options = {  
-  vus: 20,
-  duration: '30s',
+  vus: 1,
+  duration: '10m',
   thresholds: {
     http_req_duration: ['p(95)<1000'],
   },
@@ -42,7 +58,7 @@ export default () => {
 
   
   const provider = getProvider();
-  const market = getMarket();
+  const market = getMarket(provider);
   const data = { provider, market, maxDepth: "2" };
   console.log(`requested for ${provider} ${market}`)
   const response = client.invoke('CryptoBridge.MarketDataService/GetOrderBookSnapshot', data);
