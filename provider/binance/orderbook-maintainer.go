@@ -10,17 +10,9 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
-type status string
-
-const (
-	running status = "running"
-	stopped status = "died"
-)
-
 const outOfSeqUpdatesLimit = 10
 
 type OrderbookMaintainer struct {
-	status    status
 	syncAPI   *BinanceAPI
 	streamAPI *BinanceStreamAPI
 
@@ -34,7 +26,6 @@ type OrderbookMaintainer struct {
 
 func NewOrderBookMaintainer(stream *BinanceStreamAPI) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
-		status:    running,
 		syncAPI:   stream.syncAPI,
 		streamAPI: stream,
 
@@ -71,7 +62,7 @@ func (m *OrderbookMaintainer) startMsgPicker(orderbook *domain.OrderBook) {
 			update := m.depthUpdateQueue.PopFront()
 			if err := m.appyUpdate(orderbook, &update.Data); err != nil {
 				logger.Printf("binance: orderbook maintainer: %s\n", err)
-				m.status = stopped
+				orderbook.Stop()
 			}
 
 			m.mu.Unlock()

@@ -8,10 +8,14 @@ import (
 )
 
 type OrderBookSource string
+type OrderBookStatus string
 
 const (
 	OrderBookSource_Provider       OrderBookSource = "Provider"
 	OrderBookSource_LocalOrderBook OrderBookSource = "LocalOrderBook"
+
+	OrderBookStatus_Ok      OrderBookStatus = "Ok"
+	OrderBookStatus_Oudated OrderBookStatus = "Outdated"
 )
 
 type OrderBookSnapshot struct {
@@ -43,6 +47,7 @@ type OrderBook struct {
 	LastUpdateID   int64
 	LastUpdateTime int64
 
+	status OrderBookStatus
 	// MessageBus chan interface{}
 	OnSnapshotRecieved chan *OrderBookSnapshot
 	updateMx           *sync.Mutex
@@ -56,6 +61,8 @@ func NewOrderBook(provider string, symbol *MarketSymbol, snapshot *OrderBookSnap
 		Bids:           parsePriceLevel(snapshot.Bids),
 		LastUpdateID:   snapshot.LastUpdateId,
 		LastUpdateTime: time.Now().Unix(),
+
+		status: OrderBookStatus_Ok,
 
 		updateMx: &sync.Mutex{},
 	}
@@ -81,6 +88,10 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 
 	ob.updateDepth(updateAsks, true)
 	ob.updateDepth(updateBids, false)
+}
+
+func (ob *OrderBook) Stop() {
+	ob.status = OrderBookStatus_Oudated
 }
 
 func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
