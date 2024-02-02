@@ -64,10 +64,10 @@ func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *interf
 	}
 }
 
-func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
-	om := NewOrderbookMaintainer(bs)
+func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
+	om := NewOrderBookMaintainer(bs)
 
-	result := om.CreareOrderBook(symbol)
+	result := om.CreareOrderBook(symbol, maxDepth)
 	if result.Err != nil {
 		return result
 	}

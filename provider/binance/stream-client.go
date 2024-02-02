@@ -63,7 +63,6 @@ func (c *BinanceStreamClient) Connect() error {
 	}
 
 	conn.Dial(binanceDefaultWebsocketEndpoint, nil)
-	// conn.SetReadLimit(655350)
 
 	c.conn = conn
 	logger.Println("connected to binance stream websocket")
@@ -148,7 +147,7 @@ func (c *BinanceStreamClient) unsubscribe(topic string) error {
 	return nil
 }
 
-func (c *BinanceStreamClient) Disconnect() error {
+func (c *BinanceStreamClient) Close() error {
 	return c.conn.Conn.Close()
 }
 

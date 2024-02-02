@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Kucoin/kucoin-go-sdk"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
+
+const apiTimeout = time.Second * 5
 
 type KucoinStreamAPI struct {
 	wc           *kucoin.WebSocketClient
@@ -57,7 +60,6 @@ func (s *KucoinStreamAPI) Connect() error {
 }
 
 func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfaces.Subscription[DepthUpdateModel], error) {
-	ch := make(chan DepthUpdateModel)
 	topic := fmt.Sprintf("/market/level2:%s", strings.ToUpper(symbol.Join("-")))
 	m := kucoin.NewSubscribeMessage(topic, false)
 
@@ -69,19 +71,7 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfa
 		return nil, err
 	}
 
-	go func() {
-		for msg := range s.messageBus {
-			if msg.Type == kucoin.Message && msg.Topic == topic {
-				data := &DepthUpdateModel{}
-
-				if err := json.Unmarshal(msg.RawData, data); err != nil {
-					logger.Printf("kucoin: failed to unmarshal message: %s\n", err.Error())
-				}
-
-				ch <- *data
-			}
-		}
-	}()
+	ch := s.startMsgPicker(topic)
 
 	return &interfaces.Subscription[DepthUpdateModel]{
 		Stream: ch,
@@ -92,10 +82,35 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfa
 	}, err
 }
 
-func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *interfaces.CreareOrderBookResult {
-	om := NewOrderbookMaintainer(NewKucoinHttpAPI(), s)
+func (s *KucoinStreamAPI) startMsgPicker(topic string) chan DepthUpdateModel {
+	ch := make(chan DepthUpdateModel)
 
-	result := om.CreareOrderBook(symbol, 5000)
+	go func() {
+		for {
+			select {
+			case <-time.After(apiTimeout):
+				logger.Printf("error while reading from the websocket. Stream stopped for topic: %s\n", topic)
+				return
+
+			case msg := <-s.messageBus:
+				if msg.Type == kucoin.Message && msg.Topic == topic {
+					data := &DepthUpdateModel{}
+
+					if err := json.Unmarshal(msg.RawData, data); err != nil {
+						logger.Printf("kucoin: failed to unmarshal message: %s\n", err.Error())
+					}
+
+					ch <- *data
+				}
+			}
+		}
+	}()
+	return ch
+}
+
+func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
+	om := NewOrderbookMaintainer(NewKucoinHttpAPI(), s)
+	result := om.CreareOrderBook(symbol, maxDepth)
 	if result.Err != nil {
 		return result
 	}

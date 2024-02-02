@@ -18,6 +18,9 @@ type OrderbookMaintainer struct {
 	depthUpdateQueue deque.Deque[DepthUpdateModel]
 	mu               sync.Mutex
 	done             chan struct{}
+
+	firstUpdateApplied   bool
+	OutOfSequeceErrCount int
 }
 
 func NewOrderbookMaintainer(api *KucoinHttpAPI, stream *KucoinStreamAPI) *OrderbookMaintainer {
@@ -32,7 +35,7 @@ func NewOrderbookMaintainer(api *KucoinHttpAPI, stream *KucoinStreamAPI) *Orderb
 
 func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit int) *i.CreareOrderBookResult {
 	log.Printf("creating orderbook for %s on kucoin", symbol.String())
-	firstUpd := m.subscribe(symbol)
+	firstUpd := m.subscribeDepthUpdateStream(symbol)
 	<-firstUpd
 
 	snapshot, err := m.httpAPI.OrderBookSnapshot(symbol, limit)
@@ -43,7 +46,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 	}
 
 	orderbook := domain.NewOrderBook("kucoin", symbol, snapshot)
-	go m.updateSelector(orderbook)
+	go m.startUpdateCatcher(orderbook)
 
 	return &i.CreareOrderBookResult{
 		OrderBook: orderbook,
@@ -57,76 +60,67 @@ func (m *OrderbookMaintainer) Stop() {
 	close(m.done)
 }
 
-func (m *OrderbookMaintainer) updateSelector(orderbook *domain.OrderBook) {
-	firstUpdateApplied := false
-
+func (m *OrderbookMaintainer) startUpdateCatcher(orderbook *domain.OrderBook) {
 	for {
 		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
-			m.mu.Unlock()
 
 			// FIXME: WTF WHY THIS EMTY UPDATES
-			// fmt.Println("update", update)
 			// Drop any event where u is <= lastUpdateId in the snapshot
-			if update.SequenceStart <= orderbook.LastUpdateID {
-				continue
-			}
-
-			// print the last update id and update sequence Ends
-			// fmt.Println("last update id", orderbook.LastUpdateID, "update sequence end", update.SequenceStart)
 
 			//  to the local snapshot to ensure that sequenceStart(new)<=sequenceEnd+1(old) and sequenceEnd(new) > sequenceEnd(old).
-			if !firstUpdateApplied &&
+			if !m.firstUpdateApplied &&
 				(update.SequenceStart <= orderbook.LastUpdateID+1 && update.SequenceEnd >= orderbook.LastUpdateID) {
-				asks := make([][]string, 0)
-				bids := make([][]string, 0)
-
-				for _, ask := range update.Changes.Asks {
-					seq, err := strconv.ParseInt(ask[2], 10, 64)
-					if err != nil {
-						panic(err)
-					}
-
-					if seq > orderbook.LastUpdateID {
-						asks = append(asks, ask)
-					}
-				}
-
-				for _, bid := range update.Changes.Bids {
-					seq, err := strconv.ParseInt(bid[2], 10, 64)
-					if err != nil {
-						panic(err)
-					}
-					if seq > orderbook.LastUpdateID {
-						bids = append(bids, bid)
-					}
-				}
-
-				firstUpdateApplied = true
-				orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
-					bids, asks, update.SequenceEnd,
-				))
+				m.applyFirstUpdate(orderbook, &update)
 				continue
 			}
 
-			if firstUpdateApplied {
+			if m.firstUpdateApplied {
+				// TODO: add seq
+				//  to the local snapshot to ensure that sequenceStart(new)<=sequenceEnd+1(old) and sequenceEnd(new) > sequenceEnd(old).
 				orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
 					update.Changes.Bids, update.Changes.Asks, update.SequenceEnd,
 				))
 			}
 
-		} else {
-			m.mu.Unlock()
 		}
+		m.mu.Unlock()
 	}
 }
 
-func (m *OrderbookMaintainer) subscribe(symbol *domain.MarketSymbol) <-chan time.Time {
+func (m *OrderbookMaintainer) applyFirstUpdate(orderbook *domain.OrderBook, update *DepthUpdateModel) {
+	asks := m.selectFromUpdatEventsLaterThan(update.Changes.Asks, orderbook.LastUpdateID)
+	bids := m.selectFromUpdatEventsLaterThan(update.Changes.Bids, orderbook.LastUpdateID)
+
+	orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
+		bids, asks, update.SequenceEnd,
+	))
+	m.firstUpdateApplied = true
+}
+
+func (m *OrderbookMaintainer) selectFromUpdatEventsLaterThan(depth [][]string, lastUpdateID int64) [][]string {
+	new := make([][]string, 0)
+
+	for _, ask := range depth {
+		seq, err := strconv.ParseInt(ask[2], 10, 64)
+		if err != nil {
+			panic(err)
+		}
+
+		if seq > lastUpdateID {
+			new = append(new, ask)
+		}
+	}
+
+	return new
+}
+
+func (m *OrderbookMaintainer) subscribeDepthUpdateStream(symbol *domain.MarketSymbol) <-chan time.Time {
 	t := time.NewTimer(3 * time.Second)
 	subscription, err := m.streamAPI.DepthDiffStream(symbol)
 	if err != nil {
-		panic("error while subscribing to depth update stream  " + err.Error())
+		logger.Fatalf("error while subscribing to depth update stream  " + err.Error())
 	}
 
 	go func() {

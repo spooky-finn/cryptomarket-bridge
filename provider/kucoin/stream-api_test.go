@@ -27,7 +27,7 @@ func TestKucoinStreamAPI(t *testing.T) {
 	}
 
 	// Cleanup - close the connection
-	result := streamAPI.GetOrderBook(symbol)
+	result := streamAPI.GetOrderBook(symbol, 50)
 	if result.Err != nil {
 		t.Errorf("Unexpected error: %s", result.Err.Error())
 	}

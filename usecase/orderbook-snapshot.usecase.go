@@ -45,7 +45,7 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 
 	orderbook, err := o.storage.Get(provider, symbol)
 	if err != nil {
-		go o.createOrderBook(provider, symbol)
+		go o.createOrderBook(provider, symbol, limit)
 		return o.apiResolver.HttpApi(provider).OrderBookSnapshot(symbol, limit)
 	}
 
@@ -54,12 +54,12 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 }
 
 func (o *OrderBookSnapshotUseCase) createOrderBook(
-	provider string, symbol *domain.MarketSymbol,
+	provider string, symbol *domain.MarketSymbol, maxDeth int,
 ) {
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	o.waitingRoom.Store(waitingRoomKey, STARTING)
 
-	result := o.apiResolver.StreamApi(provider).GetOrderBook(symbol)
+	result := o.apiResolver.StreamApi(provider).GetOrderBook(symbol, maxDeth)
 	if result.Err != nil {
 		return
 	}

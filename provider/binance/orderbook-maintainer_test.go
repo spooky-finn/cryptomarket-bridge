@@ -21,5 +21,5 @@ func TestCreateOrderBook(t *testing.T) {
 		t.Fatalf("Failed to create market symbol")
 	}
 
-	m.CreareOrderBook(symbol)
+	m.CreareOrderBook(symbol, 10)
 }

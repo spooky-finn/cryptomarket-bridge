@@ -32,7 +32,7 @@ function rundom(min, max) {
 }
 
 const getProvider = () => {
-  const providersToTest = ['kucoin', 'binance'];
+  const providersToTest = ['kucoin', ];
   return providersToTest[rundom(0, providersToTest.length)];
 }
 
