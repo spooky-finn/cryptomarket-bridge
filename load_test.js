@@ -42,8 +42,8 @@ const getMarket = (provider) => {
 }
 
 export const options = {  
-  vus: 5,
-  duration: '10m',
+  vus: 2,
+  duration: '3h',
   thresholds: {
     http_req_duration: ['p(95)<1000'],
   },

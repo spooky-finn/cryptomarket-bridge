@@ -15,7 +15,7 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
-var logger = log.New(log.Writer(), "[binance]", log.LstdFlags)
+var logger = log.New(log.Writer(), "binance ", log.LstdFlags)
 
 const ENDPOINT = ""
 
@@ -43,10 +43,10 @@ func NewBinanceAPI() *BinanceAPI {
 		HandshakeTimeout: 5 * time.Second,
 	}
 
-	endpoint := os.Getenv("BINANCE_STREAM_ENDPOINT")
+	endpoint := os.Getenv("BINANCE_WS_API_ENDPOINT")
 	conn, _, err := Dialer.Dial(endpoint, nil)
 	if err != nil {
-		panic(err)
+		logger.Printf("error dialing binance sync ws api: %s", err.Error())
 	}
 	instance.conn = conn
 

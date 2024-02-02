@@ -13,7 +13,6 @@ import (
 var logger = log.New(os.Stdout, "rpc: ", log.LstdFlags)
 
 func (s *server) GetOrderBookSnapshot(ctx context.Context, in *gen.GetOrderBookSnapshotRequest) (*gen.GetOrderBookSnapshotResponse, error) {
-	logger.Printf("received request to the orderbook snapshot for %s %s \n", in.Provider, in.Market)
 	if !s.validationService.IsSupportedProvider(in.Provider) {
 		return nil, fmt.Errorf("provider %s is not supported", in.Provider)
 	}
@@ -46,7 +45,6 @@ func (s *server) GetOrderBookSnapshot(ctx context.Context, in *gen.GetOrderBookS
 		})
 	}
 
-	logger.Printf("returning orderbook snapshot for %s %s \n", in.Provider, in.Market)
 	return &gen.GetOrderBookSnapshotResponse{
 		Source: selectOrderBookSource(snapshot.Source),
 		Bids:   bids,
