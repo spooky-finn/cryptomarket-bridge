@@ -14,13 +14,13 @@ import (
 
 var logger = log.New(log.Writer(), "[kucoin]", log.LstdFlags)
 
-type KucoinHttpAPI struct {
+type KucoinSyncAPI struct {
 	endpoint   string
 	apiService *kucoin.ApiService
 }
 
-func NewKucoinHttpAPI() *KucoinHttpAPI {
-	return &KucoinHttpAPI{
+func NewKucoinSyncAPI() *KucoinSyncAPI {
+	return &KucoinSyncAPI{
 		endpoint: os.Getenv("KUCOIN_BASE_URL"),
 		apiService: kucoin.NewApiService(
 			kucoin.ApiKeyOption(os.Getenv("KUCOIN_API_KEY")),
@@ -48,7 +48,7 @@ type OrderBookSnapshot struct {
 	Asks     [][]string `json:"asks"`
 }
 
-func (api *KucoinHttpAPI) WsConnOpts() (*kucoin.WebSocketTokenModel, error) {
+func (api *KucoinSyncAPI) WsConnOpts() (*WebSocketTokenModel, error) {
 	resp, err := api.apiService.WebSocketPublicToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ws connection options: %w", err)
@@ -60,16 +60,36 @@ func (api *KucoinHttpAPI) WsConnOpts() (*kucoin.WebSocketTokenModel, error) {
 		return nil, fmt.Errorf("failed to unmarshal response body: %w, response: %s", err, resp.Message)
 	}
 
-	return data, nil
+	servers := make([]*WebSocketServerModel, 0, len(data.Servers))
+	for _, server := range data.Servers {
+		servers = append(servers, &WebSocketServerModel{
+			PingInterval: server.PingInterval,
+			Endpoint:     server.Endpoint,
+			Protocol:     server.Protocol,
+			Encrypt:      server.Encrypt,
+			PingTimeout:  server.PingTimeout,
+		})
+	}
+
+	token := &WebSocketTokenModel{
+		Token:             data.Token,
+		AcceptUserMessage: data.AcceptUserMessage,
+		Servers:           servers,
+	}
+
+	return token, nil
 }
 
-func (api *KucoinHttpAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int) (*domain.OrderBookSnapshot, error) {
+func (api *KucoinSyncAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int) (*domain.OrderBookSnapshot, error) {
 	s := strings.ToUpper(symbol.Join("-"))
 	resp, err := api.apiService.AggregatedFullOrderBookV3(s)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get order book snapshot: %w", err)
 	}
 
+	if !resp.HttpSuccessful() {
+		return nil, fmt.Errorf("failed to get order book snapshot: %s", resp.Message)
+	}
 	data := &OrderBookSnapshot{}
 	if err = json.Unmarshal(resp.RawData, data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response body: %w, response: %s", err, resp.RawData)

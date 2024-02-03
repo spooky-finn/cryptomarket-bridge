@@ -67,7 +67,7 @@ func (c *BinanceStreamClient) Connect() error {
 	c.conn = conn
 	logger.Println("connected to binance stream websocket")
 
-	go c.listenConnection()
+	go c.read()
 	return nil
 }
 
@@ -151,7 +151,7 @@ func (c *BinanceStreamClient) Close() error {
 	return c.conn.Conn.Close()
 }
 
-func (c *BinanceStreamClient) listenConnection() {
+func (c *BinanceStreamClient) read() {
 	for {
 		_, msg, err := c.conn.ReadMessage()
 		if err != nil {

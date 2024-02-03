@@ -12,7 +12,7 @@ import (
 )
 
 type OrderbookMaintainer struct {
-	httpAPI   *KucoinHttpAPI
+	syncAPI   *KucoinSyncAPI
 	streamAPI *KucoinStreamAPI
 
 	depthUpdateQueue deque.Deque[DepthUpdateModel]
@@ -23,9 +23,9 @@ type OrderbookMaintainer struct {
 	OutOfSequeceErrCount int
 }
 
-func NewOrderbookMaintainer(api *KucoinHttpAPI, stream *KucoinStreamAPI) *OrderbookMaintainer {
+func NewOrderbookMaintainer(stream *KucoinStreamAPI) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
-		httpAPI:   api,
+		syncAPI:   stream.syncAPI,
 		streamAPI: stream,
 
 		depthUpdateQueue: deque.Deque[DepthUpdateModel]{},
@@ -38,7 +38,9 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 	firstUpd := m.subscribeDepthUpdateStream(symbol)
 	<-firstUpd
 
-	snapshot, err := m.httpAPI.OrderBookSnapshot(symbol, limit)
+	log.Printf("subscribed to depth update stream for %s on kucoin", symbol.String())
+	snapshot, err := m.syncAPI.OrderBookSnapshot(symbol, limit)
+	log.Printf("got snapshot for %s on kucoin", symbol.String())
 	if err != nil {
 		return &i.CreareOrderBookResult{
 			Err: err,
@@ -56,7 +58,6 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 }
 
 func (m *OrderbookMaintainer) Stop() {
-	m.streamAPI.wc.Stop()
 	close(m.done)
 }
 
@@ -130,7 +131,7 @@ func (m *OrderbookMaintainer) subscribeDepthUpdateStream(symbol *domain.MarketSy
 				return
 			case update := <-subscription.Stream:
 				m.mu.Lock()
-				m.depthUpdateQueue.PushBack(update)
+				m.depthUpdateQueue.PushBack(*update)
 				m.mu.Unlock()
 			}
 		}

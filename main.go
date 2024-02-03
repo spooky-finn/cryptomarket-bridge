@@ -15,6 +15,8 @@ import (
 )
 
 var (
+	DebugMode = false
+
 	port               = flag.Int("port", 50051, "The server port")
 	availableProviders = flag.String("providers", "binance,kucoin", "The available providers")
 )

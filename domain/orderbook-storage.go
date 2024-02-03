@@ -23,7 +23,7 @@ func NewOrderBookStorage() *OrderBookStorage {
 		storage: make(map[string]map[string]*OrderBook),
 	}
 
-	go s.startOutdetedOrderBookCleaner()
+	go s.runGC()
 	return s
 }
 
@@ -70,7 +70,7 @@ func (o *OrderBookStorage) Remove(provider string, symbol *MarketSymbol) {
 	promclient.KucoinOpenOrderBookGauge.Set(float64(o.OrderBookCount("kucoin")))
 }
 
-func (o *OrderBookStorage) startOutdetedOrderBookCleaner() {
+func (o *OrderBookStorage) runGC() {
 	for {
 		for provider, symbols := range o.storage {
 			for symbol, orderBook := range symbols {

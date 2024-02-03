@@ -7,7 +7,7 @@ import (
 )
 
 type APIResolver struct {
-	KucoinHttpApi    *kucoin.KucoinHttpAPI
+	KucoinHttpApi    *kucoin.KucoinSyncAPI
 	KucoinStreamAPI  *kucoin.KucoinStreamAPI
 	BinanceHttpAPI   *binance.BinanceAPI
 	BinanceStreamAPI *binance.BinanceStreamAPI
@@ -16,10 +16,17 @@ type APIResolver struct {
 func NewAPIResolver() *APIResolver {
 	binanceStreamClient := binance.NewBinanceStreamClient()
 	binanceSyncAPI := binance.NewBinanceAPI()
-	kucoinHttpApi := kucoin.NewKucoinHttpAPI()
-	KucoinStreamAPI := kucoin.NewKucoinStreamAPI(kucoinHttpApi)
 
-	if err := KucoinStreamAPI.Connect(); err != nil {
+	kucoinSyncAPI := kucoin.NewKucoinSyncAPI()
+	wsConnOpts, err := kucoinSyncAPI.WsConnOpts()
+	if err != nil {
+		panic("failed to get ws connection options: " + err.Error())
+	}
+
+	kucoinStreamClient := kucoin.NewKucoinStreamClient(wsConnOpts)
+	KucoinStreamAPI := kucoin.NewKucoinStreamAPI(kucoinStreamClient)
+
+	if _, _, err := kucoinStreamClient.Connect(); err != nil {
 		panic("failed to connect to kucoin stream: " + err.Error())
 	}
 
@@ -28,7 +35,7 @@ func NewAPIResolver() *APIResolver {
 	}
 
 	return &APIResolver{
-		KucoinHttpApi:    kucoinHttpApi,
+		KucoinHttpApi:    kucoinSyncAPI,
 		KucoinStreamAPI:  KucoinStreamAPI,
 		BinanceHttpAPI:   binanceSyncAPI,
 		BinanceStreamAPI: binance.NewBinanceStreamAPI(binanceStreamClient, binanceSyncAPI),

@@ -9,7 +9,7 @@ import (
 )
 
 func TestGerWsConnOpts(t *testing.T) {
-	api := NewKucoinHttpAPI()
+	api := NewKucoinSyncAPI()
 
 	opts, err := api.WsConnOpts()
 	if err != nil {
@@ -17,15 +17,17 @@ func TestGerWsConnOpts(t *testing.T) {
 	}
 
 	assert.NotEmpty(t, opts.Token)
+	assert.GreaterOrEqual(t, len(opts.Servers), 1)
 }
 
 func TestGetOrderBookSnapshot(t *testing.T) {
 	err := godotenv.Load("../../.env")
+
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	api := NewKucoinHttpAPI()
+	api := NewKucoinSyncAPI()
 
 	symbol, _ := domain.NewMarketSymbol("BTC", "USDT")
 
@@ -37,4 +39,9 @@ func TestGetOrderBookSnapshot(t *testing.T) {
 	assert.NotEmpty(t, snapshot.LastUpdateId)
 	assert.NotEmpty(t, snapshot.Bids)
 	assert.NotEmpty(t, snapshot.Asks)
+
+	// assert len of bids and asks
+	assert.Equal(t, 5, len(snapshot.Bids))
+	assert.Equal(t, 5, len(snapshot.Asks))
+
 }

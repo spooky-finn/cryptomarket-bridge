@@ -4,33 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/Kucoin/kucoin-go-sdk"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
-const apiTimeout = time.Second * 5
-
 type KucoinStreamAPI struct {
-	wc           *kucoin.WebSocketClient
-	sendingMutex sync.Mutex
-
-	messageBus <-chan *kucoin.WebSocketDownstreamMessage
-	errorBus   <-chan error
+	wc          *KucoinStreamClient
+	syncAPI     *KucoinSyncAPI
+	apiTinmeout time.Duration
 }
 
-func NewKucoinStreamAPI(api *KucoinHttpAPI) *KucoinStreamAPI {
-	wsConnOpts, err := api.WsConnOpts()
-
-	if err != nil {
-		panic("failed to get ws connection options: " + err.Error())
-	}
-
+func NewKucoinStreamAPI(wc *KucoinStreamClient, syncAPI *KucoinSyncAPI) *KucoinStreamAPI {
 	return &KucoinStreamAPI{
-		wc: api.apiService.NewWebSocketClient(wsConnOpts),
+		wc:          wc,
+		syncAPI:     syncAPI,
+		apiTinmeout: time.Second * 5,
 	}
 }
 
@@ -47,69 +37,35 @@ type OrderBookChanges struct {
 	Bids [][]string `json:"bids"`
 }
 
-func (s *KucoinStreamAPI) Connect() error {
-	bus, errorBus, err := s.wc.Connect()
-	if err != nil {
-		return fmt.Errorf("failed to connect to kucoin websocket: %w", err)
-	}
-
-	logger.Println("connected to the kucoin stream websocket")
-	s.messageBus = bus
-	s.errorBus = errorBus
-	return err
-}
-
-func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfaces.Subscription[DepthUpdateModel], error) {
+func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfaces.Subscription[*DepthUpdateModel], error) {
 	topic := fmt.Sprintf("/market/level2:%s", strings.ToUpper(symbol.Join("-")))
-	m := kucoin.NewSubscribeMessage(topic, false)
+	m := NewSubscribeMessage(topic, false)
+	subscribtion, err := s.wc.Subscribe(m)
+	out := make(chan *DepthUpdateModel)
 
-	s.sendingMutex.Lock()
-	defer s.sendingMutex.Unlock()
+	go func() {
+		defer close(out)
 
-	err := s.wc.Subscribe(m)
-	if err != nil {
-		return nil, err
-	}
+		for msg := range subscribtion.Stream {
+			message := &DepthUpdateModel{}
+			err := json.Unmarshal(msg, &message)
+			if err != nil {
+				fmt.Printf("Error unmarshaling message: %s", err)
+			}
+			out <- message
+		}
+	}()
 
-	ch := s.startMsgPicker(topic)
-
-	return &interfaces.Subscription[DepthUpdateModel]{
-		Stream: ch,
-		Topic:  topic,
-		Unsubscribe: func() {
-			s.wc.Unsubscribe(kucoin.NewUnsubscribeMessage(topic, false))
-		},
+	return &interfaces.Subscription[*DepthUpdateModel]{
+		Stream:      out,
+		Topic:       topic,
+		Unsubscribe: subscribtion.Unsubscribe,
 	}, err
 }
 
-func (s *KucoinStreamAPI) startMsgPicker(topic string) chan DepthUpdateModel {
-	ch := make(chan DepthUpdateModel)
-
-	go func() {
-		for {
-			select {
-			case <-time.After(apiTimeout):
-				logger.Printf("error while reading from the websocket. Stream stopped for topic: %s\n", topic)
-				return
-
-			case msg := <-s.messageBus:
-				if msg.Type == kucoin.Message && msg.Topic == topic {
-					data := &DepthUpdateModel{}
-
-					if err := json.Unmarshal(msg.RawData, data); err != nil {
-						logger.Printf("kucoin: failed to unmarshal message: %s\n", err.Error())
-					}
-
-					ch <- *data
-				}
-			}
-		}
-	}()
-	return ch
-}
-
 func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
-	om := NewOrderbookMaintainer(NewKucoinHttpAPI(), s)
+	om := NewOrderbookMaintainer(s)
+
 	result := om.CreareOrderBook(symbol, maxDepth)
 	if result.Err != nil {
 		return result
