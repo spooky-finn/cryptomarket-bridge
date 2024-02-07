@@ -7,20 +7,20 @@ import (
 	"time"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
+	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 type KucoinStreamAPI struct {
-	wc          *KucoinStreamClient
-	syncAPI     *KucoinSyncAPI
-	apiTinmeout time.Duration
+	wc         *KucoinStreamClient
+	syncAPI    *KucoinSyncAPI
+	apiTimeout time.Duration
 }
 
 func NewKucoinStreamAPI(wc *KucoinStreamClient, syncAPI *KucoinSyncAPI) *KucoinStreamAPI {
 	return &KucoinStreamAPI{
-		wc:          wc,
-		syncAPI:     syncAPI,
-		apiTinmeout: time.Second * 5,
+		wc:         wc,
+		syncAPI:    syncAPI,
+		apiTimeout: time.Second * 10,
 	}
 }
 
@@ -37,7 +37,9 @@ type OrderBookChanges struct {
 	Bids [][]string `json:"bids"`
 }
 
-func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfaces.Subscription[*DepthUpdateModel], error) {
+type DethUpdateSubscribtion = *i.Subscription[*DepthUpdateModel]
+
+func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (DethUpdateSubscribtion, error) {
 	topic := fmt.Sprintf("/market/level2:%s", strings.ToUpper(symbol.Join("-")))
 	m := NewSubscribeMessage(topic, false)
 	subscribtion, err := s.wc.Subscribe(m)
@@ -56,22 +58,22 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*interfa
 		}
 	}()
 
-	return &interfaces.Subscription[*DepthUpdateModel]{
+	return &i.Subscription[*DepthUpdateModel]{
 		Stream:      out,
 		Topic:       topic,
 		Unsubscribe: subscribtion.Unsubscribe,
 	}, err
 }
 
-func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
-	om := NewOrderbookMaintainer(s)
+func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *i.CreareOrderBookResult {
+	om := NewOrderBookMaintainer(s)
 
 	result := om.CreareOrderBook(symbol, maxDepth)
 	if result.Err != nil {
 		return result
 	}
 
-	return &interfaces.CreareOrderBookResult{
+	return &i.CreareOrderBookResult{
 		OrderBook: result.OrderBook,
 		Snapshot:  result.Snapshot,
 		Err:       nil,

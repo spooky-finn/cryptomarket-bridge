@@ -26,7 +26,7 @@ func NewMarketSymbol(base string, quote string) (*MarketSymbol, error) {
 }
 
 func NewMarketSymbolFromString(s string) (*MarketSymbol, error) {
-	split := strings.Split(s, "/")
+	split := strings.Split(s, "_")
 
 	if len(split) != 2 {
 		return nil, fmt.Errorf("invalid symbol string")
@@ -42,7 +42,7 @@ func (ms *MarketSymbol) Join(separator string) string {
 }
 
 func (ms *MarketSymbol) String() string {
-	return fmt.Sprintf("%s/%s", ms.BaseAsset, ms.QuoteAsset)
+	return fmt.Sprintf("%s_%s", ms.BaseAsset, ms.QuoteAsset)
 }
 
 func (ms *MarketSymbol) Equal(other *MarketSymbol) bool {

@@ -4,7 +4,6 @@ import (
 	"log"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
@@ -23,7 +22,7 @@ type OrderbookMaintainer struct {
 	OutOfSequeceErrCount int
 }
 
-func NewOrderbookMaintainer(stream *KucoinStreamAPI) *OrderbookMaintainer {
+func NewOrderBookMaintainer(stream *KucoinStreamAPI) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
 		syncAPI:   stream.syncAPI,
 		streamAPI: stream,
@@ -35,7 +34,7 @@ func NewOrderbookMaintainer(stream *KucoinStreamAPI) *OrderbookMaintainer {
 
 func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit int) *i.CreareOrderBookResult {
 	log.Printf("creating orderbook for %s on kucoin", symbol.String())
-	firstUpd := m.subscribeDepthUpdateStream(symbol)
+	firstUpd := m.streamSubscriber(symbol)
 	<-firstUpd
 
 	log.Printf("subscribed to depth update stream for %s on kucoin", symbol.String())
@@ -48,7 +47,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 	}
 
 	orderbook := domain.NewOrderBook("kucoin", symbol, snapshot)
-	go m.startUpdateCatcher(orderbook)
+	go m.queueReader(orderbook)
 
 	return &i.CreareOrderBookResult{
 		OrderBook: orderbook,
@@ -61,7 +60,7 @@ func (m *OrderbookMaintainer) Stop() {
 	close(m.done)
 }
 
-func (m *OrderbookMaintainer) startUpdateCatcher(orderbook *domain.OrderBook) {
+func (m *OrderbookMaintainer) queueReader(orderbook *domain.OrderBook) {
 	for {
 		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
@@ -117,8 +116,9 @@ func (m *OrderbookMaintainer) selectFromUpdatEventsLaterThan(depth [][]string, l
 	return new
 }
 
-func (m *OrderbookMaintainer) subscribeDepthUpdateStream(symbol *domain.MarketSymbol) <-chan time.Time {
-	t := time.NewTimer(3 * time.Second)
+func (m *OrderbookMaintainer) streamSubscriber(symbol *domain.MarketSymbol) <-chan struct{} {
+	onFirstUpdate := make(chan struct{}, 1)
+
 	subscription, err := m.streamAPI.DepthDiffStream(symbol)
 	if err != nil {
 		logger.Fatalf("error while subscribing to depth update stream  " + err.Error())
@@ -133,9 +133,14 @@ func (m *OrderbookMaintainer) subscribeDepthUpdateStream(symbol *domain.MarketSy
 				m.mu.Lock()
 				m.depthUpdateQueue.PushBack(*update)
 				m.mu.Unlock()
+
+				if !m.firstUpdateApplied {
+					onFirstUpdate <- struct{}{}
+					close(onFirstUpdate)
+				}
 			}
 		}
 	}()
 
-	return t.C
+	return onFirstUpdate
 }

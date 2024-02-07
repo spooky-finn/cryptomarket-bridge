@@ -34,7 +34,7 @@ func NewOrderBookMaintainer(stream *BinanceStreamAPI) *OrderBookMaintainer {
 }
 
 func (m *OrderBookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
-	firstUpd, err := m.queueWriter(symbol)
+	firstUpd, err := m.streamSubscriber(symbol)
 	if err != nil {
 		return &interfaces.CreareOrderBookResult{
 			Err: err,
@@ -121,7 +121,7 @@ func Stop(m *OrderBookMaintainer) {
 }
 
 // Return channel which triggers on first update
-func (m *OrderBookMaintainer) queueWriter(symbol *domain.MarketSymbol) (<-chan struct{}, error) {
+func (m *OrderBookMaintainer) streamSubscriber(symbol *domain.MarketSymbol) (<-chan struct{}, error) {
 	onFirstUpdate := make(chan struct{}, 1)
 	subscribtion, err := m.streamAPI.DepthDiffStream(symbol)
 
@@ -130,6 +130,7 @@ func (m *OrderBookMaintainer) queueWriter(symbol *domain.MarketSymbol) (<-chan s
 	}
 
 	go func() {
+
 		for {
 			select {
 			case <-m.done:
@@ -139,10 +140,10 @@ func (m *OrderBookMaintainer) queueWriter(symbol *domain.MarketSymbol) (<-chan s
 				m.depthUpdateQueue.PushBack(update)
 				m.mu.Unlock()
 
-				onFirstUpdate <- struct{}{}
-				close(onFirstUpdate)
-
-				return
+				if !m.firstUpdateApplied {
+					onFirstUpdate <- struct{}{}
+					close(onFirstUpdate)
+				}
 			}
 		}
 	}()
