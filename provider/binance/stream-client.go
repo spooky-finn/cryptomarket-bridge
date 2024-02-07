@@ -71,7 +71,7 @@ func (c *BinanceStreamClient) Connect() error {
 	return nil
 }
 
-func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[]byte] {
+func (c *BinanceStreamClient) Subscribe(topic string) (*interfaces.Subscription[[]byte], error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -83,34 +83,31 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 	}
 
 	entry, ok := c.subscriptions[topic]
+	ch := make(chan []byte)
+
 	if ok {
 		entry.subscriberCount++
 		c.subscriptions[topic] = entry
 
-		return &interfaces.Subscription[[]byte]{
-			Stream: entry.ch,
-			Unsubscribe: func() {
-				c.unsubscribe(topic)
-			},
-			Topic: topic,
+		ch = entry.ch
+	} else {
+		c.subscriptions[topic] = &SubscribtionEntry{
+			ch:              ch,
+			subscriberCount: 1,
 		}
-	}
 
-	ch := make(chan []byte)
-	c.subscriptions[topic] = &SubscribtionEntry{
-		ch:              ch,
-		subscriberCount: 1,
-	}
+		logger.Println("subscribing to the ", topic)
 
-	logger.Println("subscribing to the ", topic)
-	err := c.conn.WriteJSON(ReqMessage{
-		Method: "SUBSCRIBE",
-		ReqId:  getRandomReqID(),
-		Params: []string{topic},
-	})
+		err := c.conn.WriteJSON(ReqMessage{
+			Method: "SUBSCRIBE",
+			ReqId:  getRandomReqID(),
+			Params: []string{topic},
+		})
 
-	if err != nil {
-		panic(err)
+		if err != nil {
+			return nil, fmt.Errorf("failed to subscribe to %v", topic)
+		}
+
 	}
 
 	return &interfaces.Subscription[[]byte]{
@@ -119,7 +116,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) *interfaces.Subscription[[
 			c.unsubscribe(topic)
 		},
 		Topic: topic,
-	}
+	}, nil
 }
 
 func (c *BinanceStreamClient) unsubscribe(topic string) error {

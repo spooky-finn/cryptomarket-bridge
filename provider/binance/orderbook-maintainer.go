@@ -3,7 +3,6 @@ package binance
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
@@ -12,7 +11,7 @@ import (
 
 const outOfSeqUpdatesLimit = 10
 
-type OrderbookMaintainer struct {
+type OrderBookMaintainer struct {
 	syncAPI   *BinanceAPI
 	streamAPI *BinanceStreamAPI
 
@@ -24,8 +23,8 @@ type OrderbookMaintainer struct {
 	OutOfSequeceErrCount int
 }
 
-func NewOrderBookMaintainer(stream *BinanceStreamAPI) *OrderbookMaintainer {
-	return &OrderbookMaintainer{
+func NewOrderBookMaintainer(stream *BinanceStreamAPI) *OrderBookMaintainer {
+	return &OrderBookMaintainer{
 		syncAPI:   stream.syncAPI,
 		streamAPI: stream,
 
@@ -34,10 +33,16 @@ func NewOrderBookMaintainer(stream *BinanceStreamAPI) *OrderbookMaintainer {
 	}
 }
 
-func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
-	firstUpd := m.subscribeDepthUpdateStream(symbol)
-	<-firstUpd
+func (m *OrderBookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
+	firstUpd, err := m.queueWriter(symbol)
+	if err != nil {
+		return &interfaces.CreareOrderBookResult{
+			Err: err,
+		}
 
+	}
+
+	<-firstUpd
 	snapshot, err := m.syncAPI.OrderBookSnapshot(symbol, maxDepth)
 	if err != nil {
 		return &interfaces.CreareOrderBookResult{
@@ -46,7 +51,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, maxDe
 	}
 
 	orderbook := domain.NewOrderBook("binance", symbol, snapshot)
-	go m.startMsgPicker(orderbook)
+	go m.queueReader(orderbook)
 
 	return &interfaces.CreareOrderBookResult{
 		OrderBook: orderbook,
@@ -55,27 +60,26 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, maxDe
 	}
 }
 
-func (m *OrderbookMaintainer) startMsgPicker(orderbook *domain.OrderBook) {
+func (m *OrderBookMaintainer) queueReader(orderbook *domain.OrderBook) {
 	for {
 		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
+
 			if err := m.appyUpdate(orderbook, &update.Data); err != nil {
-				logger.Printf("binance: orderbook maintainer: %s\n", err)
-				orderbook.Stop()
+				logger.Printf("binance: orderbook maintainer: fail to apply update: %s\n", err)
+				orderbook.StatusOutdated()
 			}
 
 			m.mu.Unlock()
 			return
 		} else {
 			m.mu.Unlock()
-
-			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
 
-func (m *OrderbookMaintainer) appyUpdate(orderbook *domain.OrderBook, update *DepthUpdateData) error {
+func (m *OrderBookMaintainer) appyUpdate(orderbook *domain.OrderBook, update *DepthUpdateData) error {
 	upd := domain.NewOrderBookUpdate(
 		update.Bids, update.Asks, update.FinalUpdateId,
 	)
@@ -111,35 +115,37 @@ func (m *OrderbookMaintainer) appyUpdate(orderbook *domain.OrderBook, update *De
 	return nil
 }
 
-func Stop(m *OrderbookMaintainer) {
+func Stop(m *OrderBookMaintainer) {
 	close(m.done)
 	_ = m.syncAPI.conn.Close()
 }
 
-// Return buffered channel which triggers on first update
-func (m *OrderbookMaintainer) subscribeDepthUpdateStream(symbol *domain.MarketSymbol) <-chan struct{} {
-	counter := 0
-	firstUpdate := make(chan struct{}, 1)
-	subscribtion := m.streamAPI.DepthDiffStream(symbol)
+// Return channel which triggers on first update
+func (m *OrderBookMaintainer) queueWriter(symbol *domain.MarketSymbol) (<-chan struct{}, error) {
+	onFirstUpdate := make(chan struct{}, 1)
+	subscribtion, err := m.streamAPI.DepthDiffStream(symbol)
+
+	if err != nil {
+		return nil, err
+	}
 
 	go func() {
 		for {
 			select {
 			case <-m.done:
-				return
+				return // stop the loop
 			case update := <-subscribtion.Stream:
 				m.mu.Lock()
 				m.depthUpdateQueue.PushBack(update)
 				m.mu.Unlock()
 
-				if counter == 0 {
-					firstUpdate <- struct{}{}
-				}
+				onFirstUpdate <- struct{}{}
+				close(onFirstUpdate)
 
-				counter++
+				return
 			}
 		}
 	}()
 
-	return firstUpdate
+	return onFirstUpdate, nil
 }

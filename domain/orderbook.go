@@ -90,7 +90,7 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 	ob.updateDepth(updateBids, false)
 }
 
-func (ob *OrderBook) Stop() {
+func (ob *OrderBook) StatusOutdated() {
 	ob.status = OrderBookStatus_Oudated
 }
 

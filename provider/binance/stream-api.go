@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
+	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 var baseEndpoints = []string{
@@ -18,6 +18,8 @@ type BinanceStreamAPI struct {
 	streamClient *BinanceStreamClient
 	syncAPI      *BinanceAPI
 }
+
+type DethUpdateSubscribtion = i.Subscription[Message[DepthUpdateData]]
 
 type DepthUpdateData struct {
 	Event         string     `json:"e"`
@@ -37,14 +39,17 @@ func NewBinanceStreamAPI(client *BinanceStreamClient, syncAPI *BinanceAPI) *Bina
 	}
 }
 
-func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *interfaces.Subscription[Message[DepthUpdateData]] {
+func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*DethUpdateSubscribtion, error) {
 	topic := fmt.Sprintf("%s@depth", symbol.Join(""))
-	subscribtion := bs.streamClient.Subscribe(topic)
-
-	// unmarschal the message
+	subscribtion, err := bs.streamClient.Subscribe(topic)
+	if err != nil {
+		return nil, err
+	}
 	s := make(chan Message[DepthUpdateData])
 
 	go func() {
+		defer close(s)
+
 		for msg := range subscribtion.Stream {
 			var message Message[DepthUpdateData]
 			err := json.Unmarshal(msg, &message)
@@ -57,14 +62,14 @@ func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) *interf
 		}
 	}()
 
-	return &interfaces.Subscription[Message[DepthUpdateData]]{
+	return &i.Subscription[Message[DepthUpdateData]]{
 		Stream:      s,
 		Unsubscribe: subscribtion.Unsubscribe,
 		Topic:       topic,
-	}
+	}, nil
 }
 
-func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *interfaces.CreareOrderBookResult {
+func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *i.CreareOrderBookResult {
 	om := NewOrderBookMaintainer(bs)
 
 	result := om.CreareOrderBook(symbol, maxDepth)

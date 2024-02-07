@@ -11,7 +11,7 @@ func TestCreateOrderBook(t *testing.T) {
 	streamClient.Connect()
 	syncAPI := NewBinanceAPI()
 
-	m := &OrderbookMaintainer{
+	m := &OrderBookMaintainer{
 		syncAPI:   syncAPI,
 		streamAPI: NewBinanceStreamAPI(streamClient, syncAPI),
 	}
