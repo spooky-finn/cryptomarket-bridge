@@ -28,13 +28,13 @@ type SubscribtionEntry struct {
 	subscriberCount int
 }
 
-type ReqMessage struct {
+type WebSocketRequestModel struct {
 	ReqId  int      `json:"id"`
 	Params []string `json:"params"`
 	Method string   `json:"method"`
 }
 
-type ReqMessageAck struct {
+type WebSocketAckModel struct {
 	Result string `json:"stream"`
 	ReqId  int    `json:"id"`
 }
@@ -44,6 +44,8 @@ type BinanceStreamClient struct {
 	subscriptions map[string]*SubscribtionEntry
 	mu            sync.Mutex
 }
+
+type SubscibeResult = *interfaces.Subscription[[]byte]
 
 func NewBinanceStreamClient() *BinanceStreamClient {
 	return &BinanceStreamClient{
@@ -71,7 +73,7 @@ func (c *BinanceStreamClient) Connect() error {
 	return nil
 }
 
-func (c *BinanceStreamClient) Subscribe(topic string) (*interfaces.Subscription[[]byte], error) {
+func (c *BinanceStreamClient) Subscribe(topic string) (SubscibeResult, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -98,14 +100,14 @@ func (c *BinanceStreamClient) Subscribe(topic string) (*interfaces.Subscription[
 
 		logger.Println("subscribing to the ", topic)
 
-		err := c.conn.WriteJSON(ReqMessage{
+		err := c.conn.WriteJSON(WebSocketRequestModel{
 			Method: "SUBSCRIBE",
 			ReqId:  getRandomReqID(),
 			Params: []string{topic},
 		})
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to subscribe to %v", topic)
+			return nil, fmt.Errorf("failed to send subscribe msg for topic=%s", topic)
 		}
 
 	}
@@ -113,13 +115,13 @@ func (c *BinanceStreamClient) Subscribe(topic string) (*interfaces.Subscription[
 	return &interfaces.Subscription[[]byte]{
 		Stream: ch,
 		Unsubscribe: func() {
-			c.unsubscribe(topic)
+			c.unSubscribe(topic)
 		},
 		Topic: topic,
 	}, nil
 }
 
-func (c *BinanceStreamClient) unsubscribe(topic string) error {
+func (c *BinanceStreamClient) unSubscribe(topic string) error {
 	logger.Println("unsubscribing from topic ", topic)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -131,7 +133,7 @@ func (c *BinanceStreamClient) unsubscribe(topic string) error {
 		delete(c.subscriptions, topic)
 	}
 
-	err := c.conn.WriteJSON(ReqMessage{
+	err := c.conn.WriteJSON(WebSocketRequestModel{
 		Method: "UNSUBSCRIBE",
 		ReqId:  getRandomReqID(),
 		Params: []string{topic},
@@ -152,7 +154,8 @@ func (c *BinanceStreamClient) read() {
 	for {
 		_, msg, err := c.conn.ReadMessage()
 		if err != nil {
-			panic(err)
+			fmt.Printf("error: while reading from connection %v \n", err)
+			continue
 		}
 
 		var multiStreamData map[string]interface{}

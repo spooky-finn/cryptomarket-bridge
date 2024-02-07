@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGerWsConnOpts(t *testing.T) {
+func TestWSConnOpts(t *testing.T) {
 	api := NewKucoinSyncAPI()
 
 	opts, err := api.WsConnOpts()
