@@ -34,7 +34,7 @@ func NewOrderBookMaintainer(stream *KucoinStreamAPI) *OrderbookMaintainer {
 
 func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit int) *i.CreareOrderBookResult {
 	log.Printf("creating orderbook for %s on kucoin", symbol.String())
-	firstUpd := m.streamSubscriber(symbol)
+	firstUpd := m.runStreamSubscriber(symbol)
 	<-firstUpd
 
 	log.Printf("subscribed to depth update stream for %s on kucoin", symbol.String())
@@ -83,7 +83,6 @@ func (m *OrderbookMaintainer) queueReader(orderbook *domain.OrderBook) {
 					update.Changes.Bids, update.Changes.Asks, update.SequenceEnd,
 				))
 			}
-
 		}
 		m.mu.Unlock()
 	}
@@ -116,8 +115,8 @@ func (m *OrderbookMaintainer) selectFromUpdatEventsLaterThan(depth [][]string, l
 	return new
 }
 
-func (m *OrderbookMaintainer) streamSubscriber(symbol *domain.MarketSymbol) <-chan struct{} {
-	onFirstUpdate := make(chan struct{}, 1)
+func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <-chan struct{} {
+	onFirstUpdateCh := make(chan struct{}, 1)
 
 	subscription, err := m.streamAPI.DepthDiffStream(symbol)
 	if err != nil {
@@ -134,13 +133,14 @@ func (m *OrderbookMaintainer) streamSubscriber(symbol *domain.MarketSymbol) <-ch
 				m.depthUpdateQueue.PushBack(*update)
 				m.mu.Unlock()
 
-				if !m.firstUpdateApplied {
-					onFirstUpdate <- struct{}{}
-					close(onFirstUpdate)
+				_, ok := (<-onFirstUpdateCh)
+				if ok {
+					onFirstUpdateCh <- struct{}{}
+					close(onFirstUpdateCh)
 				}
 			}
 		}
 	}()
 
-	return onFirstUpdate
+	return onFirstUpdateCh
 }

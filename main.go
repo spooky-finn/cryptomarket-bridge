@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
 	gen "github.com/spooky-finn/go-cryptomarkets-bridge/gen"
 	promclient "github.com/spooky-finn/go-cryptomarkets-bridge/infrastructure/prometheus"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/rpc"
@@ -15,17 +16,16 @@ import (
 )
 
 var (
-	DebugMode = false
-
 	port               = flag.Int("port", 50051, "The server port")
 	availableProviders = flag.String("providers", "binance,kucoin", "The available providers")
+	debugMode          = flag.Bool("debug", false, "Enable debug mode")
 )
 
 func main() {
 	godotenv.Load()
-
 	flag.Parse()
 	go promclient.StartPromClientServer()
+	config.DebugMode = *debugMode
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {

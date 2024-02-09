@@ -20,7 +20,7 @@ func (s *server) GetOrderBookSnapshot(ctx context.Context, in *gen.GetOrderBookS
 	marketSymbol, err := domain.NewMarketSymbolFromString(in.Market)
 	if err != nil {
 		logger.Printf("error parsing market symbol: %s", err)
-		return nil, fmt.Errorf("invalid market symbol %s. Correct market symbol should use / as a separator", in.Market)
+		return nil, fmt.Errorf("invalid market symbol %s. Correct market symbol should use _ as a separator", in.Market)
 	}
 
 	snapshot, err := s.orderbookSnapshotUseCase.GetOrderBookSnapshot(in.Provider, marketSymbol, int(in.MaxDepth))

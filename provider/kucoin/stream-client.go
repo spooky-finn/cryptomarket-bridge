@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
 
@@ -20,7 +21,6 @@ const (
 	kucoinAckTimeout               = time.Second * 5
 	pingInterval                   = time.Second * 30
 	kucoinDefaultWebsocketEndpoint = "wss://api.kucoin.com"
-	DebugMode                      = false
 )
 
 // All message types of WebSocket.
@@ -161,7 +161,7 @@ func (c *KucoinStreamClient) Connect() (<-chan *WebSocketDownstreamMessage, <-ch
 		}
 
 		if m.Type == ErrorMessage {
-			if DebugMode {
+			if config.DebugMode {
 				logger.Println("Kucoin error:", m)
 			}
 			return c.messages, c.errors, errors.Errorf("Error message: %s", helpers.ToJsonString(m))
@@ -185,7 +185,7 @@ func (c *KucoinStreamClient) Subscribe(channel *WebSocketSubscribeMessage) (*int
 	ch := make(chan []byte, 2048)
 	c.clients[channel.Topic] = ch
 
-	if DebugMode {
+	if config.DebugMode {
 		logger.Println("Subscribe to channel", channel.Topic)
 	}
 	if err := c.conn.WriteJSON(channel); err != nil {
@@ -214,7 +214,7 @@ func (c *KucoinStreamClient) CreateMultiplexTunnel(tunnelId string) error {
 	c.writeMutex.Lock()
 	defer c.writeMutex.Unlock()
 
-	if DebugMode {
+	if config.DebugMode {
 		logger.Println("Create multiplex tunnel")
 	}
 
@@ -236,7 +236,7 @@ func (c *KucoinStreamClient) waitForAck(msgId string) error {
 			if id != msgId {
 				return errors.Errorf("Invalid ack id %s, expect %s", id, msgId)
 			}
-			if DebugMode {
+			if config.DebugMode {
 				logger.Printf("Received ack message %s\n", id)
 			}
 			return nil
@@ -305,7 +305,7 @@ func (c *KucoinStreamClient) heartbeat() {
 		case <-c.done:
 			return
 		case <-pt.C:
-			if DebugMode {
+			if config.DebugMode {
 				logger.Println("send ping message")
 			}
 			c.writeMutex.Lock()
