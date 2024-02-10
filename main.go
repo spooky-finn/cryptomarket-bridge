@@ -18,14 +18,18 @@ import (
 var (
 	port               = flag.Int("port", 50051, "The server port")
 	availableProviders = flag.String("providers", "binance,kucoin", "The available providers")
-	debugMode          = flag.Bool("debug", false, "Enable debug mode")
+	debugMode          = flag.Bool("v", false, "Enable debug mode")
 )
 
 func main() {
 	godotenv.Load()
 	flag.Parse()
 	go promclient.StartPromClientServer()
+
 	config.DebugMode = *debugMode
+	if config.DebugMode {
+		log.Println("Debug mode enabled")
+	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
@@ -43,4 +47,35 @@ func main() {
 		log.Fatalf("failed to serve: %v", err)
 	}
 
+	// syncAPI := kucoin.NewKucoinSyncAPI()
+	// token, err := syncAPI.WsConnOpts()
+	// if err != nil {
+	// 	fmt.Printf("Error while creating ws connection options %s", err.Error())
+	// 	panic(err)
+	// }
+	// kucoinStreamClien := kucoin.NewKucoinStreamClient(token)
+	// _, _, err = kucoinStreamClien.Connect()
+	// if err != nil {
+	// 	fmt.Printf("Error while connecting to kucoin %s", err.Error())
+	// 	panic(err)
+	// }
+
+	// streamAPI := kucoin.NewKucoinStreamAPI(kucoinStreamClien, syncAPI)
+	// s, err := domain.NewMarketSymbolFromString("BTC_USDT")
+	// if err != nil {
+	// 	fmt.Printf("Error while creating market symbol %s", err.Error())
+	// 	panic(err)
+	// }
+	// subscribtion, err := streamAPI.DepthDiffStream(s)
+	// if err != nil {
+	// 	fmt.Printf("Error while subscribing to kucoin %s", err.Error())
+	// 	panic(err)
+	// }
+
+	// for {
+	// 	select {
+	// 	case msg := <-subscribtion.Stream:
+	// 		fmt.Println("depth strea: ", string(msg.Symbol))
+	// 	}
+	// }
 }

@@ -14,12 +14,11 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
 
-	"github.com/recws-org/recws"
+	"github.com/gorilla/websocket"
 )
 
 const (
-	kucoinAckTimeout               = time.Second * 5
-	pingInterval                   = time.Second * 30
+	kucoinDefaultTimeout           = time.Second * 5
 	kucoinDefaultWebsocketEndpoint = "wss://api.kucoin.com"
 )
 
@@ -108,63 +107,70 @@ type KucoinStreamClient struct {
 	wg *sync.WaitGroup
 	// Stop subscribing channel
 	done chan struct{}
-	// Pong channel to check pong message
+	// // Pong channel to check pong message
 	pongs chan string
-	// ACK channel to check pong message
+	// // ACK channel to check pong message
 	acks chan string
-	// Error channel
-	errors chan error
-	// Downstream message channel
-	messages chan *WebSocketDownstreamMessage
-	token    *WebSocketTokenModel
+	// // Error channel
+	// errors chan error
+	// // Downstream message channel
+	// messages chan *WebSocketDownstreamMessage
+	token *WebSocketTokenModel
 
-	conn       *recws.RecConn
+	conn       *websocket.Conn
 	writeMutex sync.Mutex
 
 	enableHeartbeat bool
+	pintInterval    time.Duration
+	pingTimeout     time.Duration
 
 	clients map[string]chan []byte
 }
 
 func NewKucoinStreamClient(token *WebSocketTokenModel) *KucoinStreamClient {
+	logger.Printf("token: %#v", token.Servers[0])
 	return &KucoinStreamClient{
-		wg:       &sync.WaitGroup{},
-		errors:   make(chan error, 1),
-		pongs:    make(chan string, 1),
-		acks:     make(chan string, 1),
-		messages: make(chan *WebSocketDownstreamMessage, 2048),
-		token:    token,
+		wg: &sync.WaitGroup{},
+		// errors:   make(chan error, 1),
+		pongs: make(chan string, 1),
+		acks:  make(chan string, 1),
+		// messages: make(chan *WebSocketDownstreamMessage, 2048),
+		token: token,
 
 		done:            make(chan struct{}),
 		enableHeartbeat: false,
+		pintInterval:    time.Duration(token.Servers[0].PingInterval) * time.Millisecond,
+		pingTimeout:     time.Duration(token.Servers[0].PingTimeout) * time.Millisecond,
 		clients:         make(map[string]chan []byte),
 	}
 }
 
-func (c *KucoinStreamClient) Connect() (<-chan *WebSocketDownstreamMessage, <-chan error, error) {
-	conn := &recws.RecConn{
-		Proxy:            http.ProxyFromEnvironment,
-		HandshakeTimeout: 5 * time.Second,
-		Conn:             nil,
-		NonVerbose:       false,
+func (c *KucoinStreamClient) Connect() error {
+	dialer := &websocket.Dialer{
+		Proxy:           http.ProxyFromEnvironment,
+		ReadBufferSize:  2048,
+		WriteBufferSize: 2048,
 	}
 
 	url := fmt.Sprintf("%s?token=%s", c.token.Servers[0].Endpoint, c.token.Token)
-	conn.Dial(url, nil)
+	conn, httpResp, err := dialer.Dial(url, nil)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to dial to the kucoin stream websocket. status: %s", httpResp.Status)
+	}
 	c.conn = conn
 
 	// Must read the first welcome message
 	for {
 		m := &WebSocketDownstreamMessage{}
 		if err := c.conn.ReadJSON(m); err != nil {
-			return c.messages, c.errors, err
+			return err
 		}
 
 		if m.Type == ErrorMessage {
 			if config.DebugMode {
 				logger.Println("Kucoin error:", m)
 			}
-			return c.messages, c.errors, errors.Errorf("Error message: %s", helpers.ToJsonString(m))
+			return errors.Errorf("Error message: %s", helpers.ToJsonString(m))
 		}
 		if m.Type == WelcomeMessage {
 			logger.Println("connected to the kucoin stream websocket")
@@ -174,8 +180,8 @@ func (c *KucoinStreamClient) Connect() (<-chan *WebSocketDownstreamMessage, <-ch
 
 	c.wg.Add(2)
 	go c.read()
-	go c.heartbeat()
-	return c.messages, c.errors, nil
+	go c.keepHeartbeat()
+	return nil
 }
 
 func (c *KucoinStreamClient) Subscribe(channel *WebSocketSubscribeMessage) (*interfaces.Subscription[[]byte], error) {
@@ -186,7 +192,7 @@ func (c *KucoinStreamClient) Subscribe(channel *WebSocketSubscribeMessage) (*int
 	c.clients[channel.Topic] = ch
 
 	if config.DebugMode {
-		logger.Println("Subscribe to channel", channel.Topic)
+		logger.Println("Subscribing to channel", channel.Topic)
 	}
 	if err := c.conn.WriteJSON(channel); err != nil {
 		return nil, err
@@ -196,33 +202,38 @@ func (c *KucoinStreamClient) Subscribe(channel *WebSocketSubscribeMessage) (*int
 		return nil, err
 	}
 
+	if config.DebugMode {
+		logger.Println("succesfully subscribet to the topic=", channel.Topic)
+	}
+
 	return &interfaces.Subscription[[]byte]{
 		Stream: ch,
 		Unsubscribe: func() {
 			// TODO: Implement unsubscribe
 			// c.Unsubscribe(NewUnsubscribeMessage(channel.Topic, channel.PrivateChannel))
+			panic("Unsubscribe not implemented")
 		},
 		Topic: channel.Topic,
 	}, nil
 }
 
 func (c *KucoinStreamClient) Close() error {
+	close(c.done)
+	close(c.acks)
+	close(c.pongs)
+	c.wg.Wait()
+
 	return c.conn.NetConn().Close()
 }
 
 func (c *KucoinStreamClient) CreateMultiplexTunnel(tunnelId string) error {
-	c.writeMutex.Lock()
-	defer c.writeMutex.Unlock()
-
-	if config.DebugMode {
-		logger.Println("Create multiplex tunnel")
-	}
-
-	if err := c.conn.WriteJSON(map[string]interface{}{
+	err := c.SendMessage(map[string]interface{}{
 		"id":       getMsgId(),
 		"type":     "openTunnel",
 		"response": true,
-	}); err != nil {
+	})
+
+	if err != nil {
 		return err
 	}
 
@@ -240,18 +251,15 @@ func (c *KucoinStreamClient) waitForAck(msgId string) error {
 				logger.Printf("Received ack message %s\n", id)
 			}
 			return nil
-		case err := <-c.errors:
-			return errors.Errorf("Subscribe failed, %s", err.Error())
-		case <-time.After(kucoinAckTimeout):
-			return errors.Errorf("Wait ack message timeout in %v", kucoinAckTimeout)
+		case <-time.After(kucoinDefaultTimeout):
+			return errors.Errorf("Wait ack message timeout in %v", kucoinDefaultTimeout)
 		}
 	}
 }
 
 func (c *KucoinStreamClient) read() {
 	defer func() {
-		close(c.messages)
-		close(c.errors)
+		close(c.pongs)
 		c.wg.Done()
 	}()
 
@@ -262,41 +270,49 @@ func (c *KucoinStreamClient) read() {
 		default:
 			m := &WebSocketDownstreamMessage{}
 			if err := c.conn.ReadJSON(m); err != nil {
-				c.errors <- err
+				logger.Fatalf("err while reading message from web conn: %s", err.Error())
 				return
 			}
 
 			switch m.Type {
 			case WelcomeMessage:
 			case PongMessage:
-				if c.enableHeartbeat {
-					c.pongs <- m.Id
-				}
+				c.pongs <- m.Id
 			case AckMessage:
 				c.acks <- m.Id
 			case ErrorMessage:
-				c.errors <- errors.Errorf("Error message: %s", helpers.ToJsonString(m))
-				return
-			case Message, Notice, Command:
-				c.messages <- m
+				logger.Printf("Error message: %s", string(m.RawData))
 
+			case Message, Notice, Command:
 				outCh, ok := c.clients[m.Topic]
 				if !ok {
-					c.errors <- errors.Errorf("Unknown topic: %s", m.Topic)
-					logger.Printf("Received message for not required topic: %s", m.Topic)
+					logger.Printf("Received message for not subscribed topic: %s, msg %#v", m.Topic, string(m.RawData))
 					continue
 				}
 				outCh <- m.RawData
-			default:
-				c.errors <- errors.Errorf("Unknown message type: %s", m.Type)
 			}
 		}
 	}
 }
 
-func (c *KucoinStreamClient) heartbeat() {
+func (c *KucoinStreamClient) SendMessage(msg interface{}) error {
+	c.writeMutex.Lock()
+	defer c.writeMutex.Unlock()
+
+	if config.DebugMode {
+		logger.Println("Send message:", helpers.ToJsonString(msg))
+	}
+
+	return c.conn.WriteJSON(msg)
+}
+
+func (c *KucoinStreamClient) keepHeartbeat() {
 	c.enableHeartbeat = true
-	pt := time.NewTicker(pingInterval)
+	if c.pintInterval == 0 {
+		panic("Heartbeat interval is not set")
+	}
+
+	pt := time.NewTicker(10 * time.Second)
 	defer c.wg.Done()
 	defer pt.Stop()
 
@@ -306,23 +322,22 @@ func (c *KucoinStreamClient) heartbeat() {
 			return
 		case <-pt.C:
 			if config.DebugMode {
-				logger.Println("send ping message")
+				logger.Println("sending ping message")
 			}
-			c.writeMutex.Lock()
-			if err := c.conn.WriteJSON(WebSocketMessage{
-				Id:   getMsgId(),
-				Type: PingMessage,
-			}); err != nil {
-				c.errors <- err
-				return
+			err := c.SendMessage(WebSocketMessage{Id: getMsgId(), Type: PingMessage})
+			if err != nil {
+				logger.Printf("err while writing ping message to the conn: %s", err.Error())
 			}
-			c.writeMutex.Unlock()
 
 			select {
-			case <-time.After(kucoinAckTimeout):
-				c.errors <- errors.Errorf("Wait pong message timeout in %v", kucoinAckTimeout)
+			case <-time.After(c.pingTimeout):
+				logger.Println("failed to receive pong message. connection will be closed")
+				c.Close()
 				return
 			case <-c.pongs:
+				if config.DebugMode {
+					logger.Println(`received pong message`)
+				}
 			}
 		}
 	}

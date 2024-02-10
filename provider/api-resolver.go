@@ -26,7 +26,7 @@ func NewAPIResolver() *APIResolver {
 	kucoinStreamClient := kucoin.NewKucoinStreamClient(wsConnOpts)
 	KucoinStreamAPI := kucoin.NewKucoinStreamAPI(kucoinStreamClient, kucoinSyncAPI)
 
-	if _, _, err := kucoinStreamClient.Connect(); err != nil {
+	if err := kucoinStreamClient.Connect(); err != nil {
 		panic("failed to connect to kucoin stream: " + err.Error())
 	}
 

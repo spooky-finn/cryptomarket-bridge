@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	promclient "github.com/spooky-finn/go-cryptomarkets-bridge/infrastructure/prometheus"
@@ -16,6 +17,7 @@ var ErrProviderNotFound = errors.New("provider not found")
 
 type OrderBookStorage struct {
 	storage map[string]map[string]*OrderBook
+	mu      sync.RWMutex
 }
 
 func NewOrderBookStorage() *OrderBookStorage {
@@ -28,17 +30,22 @@ func NewOrderBookStorage() *OrderBookStorage {
 }
 
 func (o *OrderBookStorage) Add(provider string, symbol *MarketSymbol, orderBook *OrderBook) {
+	o.mu.Lock()
 	if _, ok := o.storage[provider]; !ok {
 		o.storage[provider] = make(map[string]*OrderBook)
 	}
 
 	o.storage[provider][symbol.String()] = orderBook
+	o.mu.Unlock()
 
 	promclient.BinanceOpenOrderBookGauge.Set(float64(o.OrderBookCount("binance")))
 	promclient.KucoinOpenOrderBookGauge.Set(float64(o.OrderBookCount("kucoin")))
 }
 
 func (o *OrderBookStorage) Get(provider string, symbol *MarketSymbol) (*OrderBook, error) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
 	if _, ok := o.storage[provider]; !ok {
 		return nil, ErrProviderNotFound
 	}
@@ -51,8 +58,10 @@ func (o *OrderBookStorage) Get(provider string, symbol *MarketSymbol) (*OrderBoo
 }
 
 func (o *OrderBookStorage) OrderBookCount(provider string) int {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
 	if _, ok := o.storage[provider]; !ok {
-		logger.Println("provider not found")
 		return -1
 	}
 
@@ -60,11 +69,13 @@ func (o *OrderBookStorage) OrderBookCount(provider string) int {
 }
 
 func (o *OrderBookStorage) Remove(provider string, symbol *MarketSymbol) {
+	o.mu.Lock()
 	if _, ok := o.storage[provider]; !ok {
 		return
 	}
 
 	delete(o.storage[provider], symbol.String())
+	o.mu.Unlock()
 
 	promclient.BinanceOpenOrderBookGauge.Set(float64(o.OrderBookCount("binance")))
 	promclient.KucoinOpenOrderBookGauge.Set(float64(o.OrderBookCount("kucoin")))
@@ -72,6 +83,7 @@ func (o *OrderBookStorage) Remove(provider string, symbol *MarketSymbol) {
 
 func (o *OrderBookStorage) runGC() {
 	for {
+		o.mu.RLock()
 		for provider, symbols := range o.storage {
 			for symbol, orderBook := range symbols {
 				if orderBook.status == OrderBookStatus_Oudated {
@@ -79,8 +91,21 @@ func (o *OrderBookStorage) runGC() {
 					o.Remove(provider, orderBook.Symbol)
 				}
 			}
+
 		}
 
+		o.logStat()
+		o.mu.RUnlock()
 		<-time.After(10 * time.Second)
+	}
+}
+
+// logStat the information about the order book count in the memeory
+func (o *OrderBookStorage) logStat() {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	for provider, orderBookMap := range o.storage {
+		logger.Printf(`order book count: %s: %d`, provider, len(orderBookMap))
 	}
 }

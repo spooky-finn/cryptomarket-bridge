@@ -15,8 +15,9 @@ message GetOrderBookSnapshotRequest {
 
 message GetOrderBookSnapshotResponse {
     OrderBookSource source = 1;
-    repeated OrderBookLevel bids = 2;
-    repeated OrderBookLevel asks = 3;
+    int64 lastUpdTs = 2;
+    repeated OrderBookLevel bids = 3;
+    repeated OrderBookLevel asks = 4;
 }
 
 message OrderBookLevel {

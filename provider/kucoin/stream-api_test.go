@@ -32,7 +32,7 @@ func TestKucoinStreamAPIGetOrderBook(t *testing.T) {
 	// Create a new KucoinStrea	mAPI instance
 	streamAPI, _, streamClient := createDeps()
 
-	_, _, err = streamClient.Connect()
+	err = streamClient.Connect()
 	if err != nil {
 		t.Errorf("Error whule connecting to kucoin %s", err.Error())
 	}
@@ -59,14 +59,15 @@ func TestKucoinStreamAPIGetOrderBook(t *testing.T) {
 	}
 
 	assert.Equal(t, 3, len(result.OrderBook.TakeSnapshot(3).Asks), "Asks should have the same length as the limit")
-
+	assert.Equal(t, 3, len(result.OrderBook.TakeSnapshot(3).Bids), "Bids should have the same length as the limit")
+	// assert.Equal(t, 2, result.OrderBook.OnSnapshotRecieved)
 }
 
 func TestKucoinStreamAPIDepthStream(t *testing.T) {
 	// Create a new KucoinStreamAPI instance
 	streamAPI, _, streamClient := createDeps()
 
-	_, _, err := streamClient.Connect()
+	err := streamClient.Connect()
 	if err != nil {
 		t.Errorf("Error whule connecting to kucoin %s", err.Error())
 	}
@@ -101,5 +102,4 @@ func TestKucoinStreamAPIDepthStream(t *testing.T) {
 	if update.SequenceEnd == 0 || update.SequenceStart == 0 {
 		t.Errorf("SequenceEnd should not be 0")
 	}
-
 }

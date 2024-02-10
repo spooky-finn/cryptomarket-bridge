@@ -6,11 +6,14 @@ import (
 	"sync"
 
 	"github.com/gammazero/deque"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
+// A manager class that is responsible for maintaining the orderbook of a market.
 type OrderbookMaintainer struct {
+	ob        *domain.OrderBook
 	syncAPI   *KucoinSyncAPI
 	streamAPI *KucoinStreamAPI
 
@@ -37,7 +40,10 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 	firstUpd := m.runStreamSubscriber(symbol)
 	<-firstUpd
 
-	log.Printf("subscribed to depth update stream for %s on kucoin", symbol.String())
+	if config.DebugMode {
+		log.Printf("subscribed to depth update stream for %s on kucoin", symbol.String())
+	}
+
 	snapshot, err := m.syncAPI.OrderBookSnapshot(symbol, limit)
 	log.Printf("got snapshot for %s on kucoin", symbol.String())
 	if err != nil {
@@ -47,7 +53,8 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 	}
 
 	orderbook := domain.NewOrderBook("kucoin", symbol, snapshot)
-	go m.queueReader(orderbook)
+	m.ob = orderbook
+	go m.queueReader()
 
 	return &i.CreareOrderBookResult{
 		OrderBook: orderbook,
@@ -60,7 +67,7 @@ func (m *OrderbookMaintainer) Stop() {
 	close(m.done)
 }
 
-func (m *OrderbookMaintainer) queueReader(orderbook *domain.OrderBook) {
+func (m *OrderbookMaintainer) queueReader() {
 	for {
 		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
@@ -71,15 +78,16 @@ func (m *OrderbookMaintainer) queueReader(orderbook *domain.OrderBook) {
 
 			//  to the local snapshot to ensure that sequenceStart(new)<=sequenceEnd+1(old) and sequenceEnd(new) > sequenceEnd(old).
 			if !m.firstUpdateApplied &&
-				(update.SequenceStart <= orderbook.LastUpdateID+1 && update.SequenceEnd >= orderbook.LastUpdateID) {
-				m.applyFirstUpdate(orderbook, &update)
+				(update.SequenceStart <= m.ob.LastUpdateID+1 && update.SequenceEnd >= m.ob.LastUpdateID) {
+				m.applyFirstUpdate(m.ob, &update)
+				m.mu.Unlock()
 				continue
 			}
 
 			if m.firstUpdateApplied {
 				// TODO: add seq
 				//  to the local snapshot to ensure that sequenceStart(new)<=sequenceEnd+1(old) and sequenceEnd(new) > sequenceEnd(old).
-				orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
+				m.ob.ApplyUpdate(domain.NewOrderBookUpdate(
 					update.Changes.Bids, update.Changes.Asks, update.SequenceEnd,
 				))
 			}
@@ -116,6 +124,7 @@ func (m *OrderbookMaintainer) selectFromUpdatEventsLaterThan(depth [][]string, l
 }
 
 func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <-chan struct{} {
+	fistUpdteProcessed := false
 	onFirstUpdateCh := make(chan struct{}, 1)
 
 	subscription, err := m.streamAPI.DepthDiffStream(symbol)
@@ -131,13 +140,13 @@ func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <
 			case update := <-subscription.Stream:
 				m.mu.Lock()
 				m.depthUpdateQueue.PushBack(*update)
-				m.mu.Unlock()
 
-				_, ok := (<-onFirstUpdateCh)
-				if ok {
+				if !fistUpdteProcessed {
 					onFirstUpdateCh <- struct{}{}
+					fistUpdteProcessed = true
 					close(onFirstUpdateCh)
 				}
+				m.mu.Unlock()
 			}
 		}
 	}()

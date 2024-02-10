@@ -46,9 +46,10 @@ func (s *server) GetOrderBookSnapshot(ctx context.Context, in *gen.GetOrderBookS
 	}
 
 	return &gen.GetOrderBookSnapshotResponse{
-		Source: selectOrderBookSource(snapshot.Source),
-		Bids:   bids,
-		Asks:   asks,
+		LastUpdTs: snapshot.LastUpdateId,
+		Source:    selectOrderBookSource(snapshot.Source),
+		Bids:      bids,
+		Asks:      asks,
 	}, nil
 }
 

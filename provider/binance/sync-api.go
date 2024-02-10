@@ -15,7 +15,7 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
-var logger = log.New(log.Writer(), "binance ", log.LstdFlags)
+var logger = log.New(log.Writer(), "[binance] ", log.LstdFlags)
 
 const ENDPOINT = ""
 

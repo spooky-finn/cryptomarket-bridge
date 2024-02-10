@@ -19,10 +19,11 @@ const (
 )
 
 type OrderBookSnapshot struct {
-	Source       OrderBookSource `json:"source"`
-	LastUpdateId int64           `json:"lastUpdateId"`
-	Bids         [][]string      `json:"bids"`
-	Asks         [][]string      `json:"asks"`
+	Source         OrderBookSource `json:"source"`
+	LastUpdateId   int64           `json:"lastUpdateId"`
+	LastUpdateTime int64           `json:"lastUpdateTime"`
+	Bids           [][]string      `json:"bids"`
+	Asks           [][]string      `json:"asks"`
 }
 
 type OrderBookUpdate struct {
@@ -108,10 +109,11 @@ func (ob *OrderBook) TakeSnapshot(limit int) *OrderBookSnapshot {
 	asks = ob.limitDepth(asks, limit)
 
 	return &OrderBookSnapshot{
-		Source:       OrderBookSource_LocalOrderBook,
-		LastUpdateId: ob.LastUpdateID,
-		Bids:         serializePriceLevel(bids),
-		Asks:         serializePriceLevel(asks),
+		Source:         OrderBookSource_LocalOrderBook,
+		LastUpdateId:   ob.LastUpdateID,
+		LastUpdateTime: ob.LastUpdateTime,
+		Bids:           serializePriceLevel(bids),
+		Asks:           serializePriceLevel(asks),
 	}
 }
 
