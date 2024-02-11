@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/provider/binance"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/provider/kucoin"
 )
@@ -14,11 +14,11 @@ var logger = log.New(os.Stdout, "[api-resolver] ", log.LstdFlags)
 
 type ConnectionManager struct {
 	KucoinWS        *kucoin.KucoinStreamClient
-	KucoinHttpApi   *kucoin.KucoinSyncAPI
+	KucoinSyncAPI   *kucoin.KucoinSyncAPI
 	KucoinStreamAPI *kucoin.KucoinStreamAPI
 
 	BinanceWC        *binance.BinanceStreamClient
-	BinanceHttpAPI   *binance.BinanceAPI
+	BinanceSyncAPI   *binance.BinanceSyncAPI
 	BinanceStreamAPI *binance.BinanceStreamAPI
 }
 
@@ -37,10 +37,10 @@ func NewConnectionManager() *ConnectionManager {
 
 	return &ConnectionManager{
 		KucoinWS:         kucoinStreamClient,
-		KucoinHttpApi:    kucoinSyncAPI,
+		KucoinSyncAPI:    kucoinSyncAPI,
 		KucoinStreamAPI:  KucoinStreamAPI,
 		BinanceWC:        binanceStreamClient,
-		BinanceHttpAPI:   binanceSyncAPI,
+		BinanceSyncAPI:   binanceSyncAPI,
 		BinanceStreamAPI: binance.NewBinanceStreamAPI(binanceStreamClient, binanceSyncAPI),
 	}
 }
@@ -53,7 +53,7 @@ func (cm *ConnectionManager) Init() {
 	wg.Wait()
 }
 
-func (cm *ConnectionManager) StreamApi(provider string) interfaces.ProviderStreamAPI {
+func (cm *ConnectionManager) StreamAPI(provider string) domain.ProviderStreamAPI {
 	switch provider {
 	case "kucoin":
 		return cm.KucoinStreamAPI
@@ -64,12 +64,12 @@ func (cm *ConnectionManager) StreamApi(provider string) interfaces.ProviderStrea
 	panic("unknown provider: " + provider)
 }
 
-func (cm *ConnectionManager) HttpApi(provider string) interfaces.ProviderHttpAPI {
+func (cm *ConnectionManager) SyncAPI(provider string) domain.ProviderSyncAPI {
 	switch provider {
 	case "kucoin":
-		return cm.KucoinHttpApi
+		return cm.KucoinSyncAPI
 	case "binance":
-		return cm.BinanceHttpAPI
+		return cm.BinanceSyncAPI
 	}
 
 	panic("unknown provider: " + provider)

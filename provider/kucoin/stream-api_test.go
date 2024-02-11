@@ -89,7 +89,7 @@ func TestKucoinStreamAPIDepthStream(t *testing.T) {
 	update := <-subscription.Stream
 
 	fmt.Printf("Update: %#v\n", update)
-	if update.Symbol != "BTC-USDT" {
+	if update.Symbol.String() != "BTC-USDT" {
 		t.Errorf("Symbol should be btc-usdt")
 	}
 
@@ -132,7 +132,7 @@ func TestWaitForSync(t *testing.T) {
 func TestKucoinCreateMultiplexTunnel(t *testing.T) {
 	// Create a new KucoinStreamAPI instance
 	streamAPI, _ := createDeps()
-	err := streamAPI.WSocket.CreateMultiplexTunnel("main-tunnel")
+	err := streamAPI.WebSocket.CreateMultiplexTunnel("main-tunnel")
 	if err != nil {
 		t.Errorf("Error while creating multiplex tunnel %s", err.Error())
 		return

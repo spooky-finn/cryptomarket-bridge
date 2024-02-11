@@ -11,7 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
 
 	"github.com/gorilla/websocket"
@@ -185,7 +185,7 @@ func (c *KucoinStreamClient) Connect() error {
 	return nil
 }
 
-func (c *KucoinStreamClient) Subscribe(channel *WebSocketSubscribeMessage) (*interfaces.Subscription[[]byte], error) {
+func (c *KucoinStreamClient) Subscribe(channel *WebSocketSubscribeMessage) (*domain.Subscription[[]byte], error) {
 	c.writeMutex.Lock()
 	defer c.writeMutex.Unlock()
 
@@ -207,7 +207,7 @@ func (c *KucoinStreamClient) Subscribe(channel *WebSocketSubscribeMessage) (*int
 		logger.Println("succesfully subscribet to the topic=", channel.Topic)
 	}
 
-	return &interfaces.Subscription[[]byte]{
+	return &domain.Subscription[[]byte]{
 		Stream: ch,
 		Unsubscribe: func() {
 			// TODO: Implement unsubscribe

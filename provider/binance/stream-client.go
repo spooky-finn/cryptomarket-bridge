@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/recws-org/recws"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 )
 
 const (
@@ -45,7 +45,7 @@ type BinanceStreamClient struct {
 	mu            sync.Mutex
 }
 
-type SubscibeResult = *interfaces.Subscription[[]byte]
+type SubscibeResult = *domain.Subscription[[]byte]
 
 func NewBinanceStreamClient() *BinanceStreamClient {
 	return &BinanceStreamClient{
@@ -108,7 +108,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) (SubscibeResult, error) {
 
 	}
 
-	return &interfaces.Subscription[[]byte]{
+	return &domain.Subscription[[]byte]{
 		Stream: ch,
 		Unsubscribe: func() {
 			c.unSubscribe(topic)

@@ -27,16 +27,20 @@ type OrderBookSnapshot struct {
 }
 
 type OrderBookUpdate struct {
-	Bids         [][]string
-	Asks         [][]string
-	LastUpdateID int64
+	Bids          [][]string
+	Asks          [][]string
+	SequenceStart int64
+	SequenceEnd   int64
+	Symbol        *MarketSymbol
 }
 
-func NewOrderBookUpdate(bids [][]string, asks [][]string, lastUpdateID int64) *OrderBookUpdate {
+func NewOrderBookUpdate(bids, asks [][]string, start, end int64, symbol *MarketSymbol) *OrderBookUpdate {
 	return &OrderBookUpdate{
-		Bids:         bids,
-		Asks:         asks,
-		LastUpdateID: lastUpdateID,
+		Bids:          bids,
+		Asks:          asks,
+		SequenceStart: start,
+		SequenceEnd:   end,
+		Symbol:        symbol,
 	}
 }
 
@@ -77,14 +81,14 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 	ob.updateMx.Lock()
 	defer ob.updateMx.Unlock()
 
-	if update.LastUpdateID <= ob.LastUpdateID {
+	if update.SequenceEnd <= ob.LastUpdateID {
 		return
 	}
 
 	// TODO: add check for sequenciality of updates
 	// // The first processed event should have U <= lastUpdateId+1 AND u >= lastUpdateId+1
 
-	ob.LastUpdateID = update.LastUpdateID
+	ob.LastUpdateID = update.SequenceEnd
 	ob.LastUpdateTime = time.Now().Unix()
 
 	ob.updateDepth(updateAsks, true)

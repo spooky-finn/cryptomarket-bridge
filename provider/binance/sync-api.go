@@ -20,7 +20,7 @@ var logger = log.New(log.Writer(), "[binance] ", log.LstdFlags)
 const ENDPOINT = ""
 
 // Get OrderBookSnapshot (Depth)
-type BinanceAPI struct {
+type BinanceSyncAPI struct {
 	conn       *websocket.Conn
 	writeMutex sync.Mutex
 	in         chan []byte
@@ -32,9 +32,9 @@ type GenericMessage[T any] struct {
 	Result T   `json:"result"`
 }
 
-func NewBinanceAPI() *BinanceAPI {
+func NewBinanceAPI() *BinanceSyncAPI {
 	logger.Println("instantiating binance websocket api")
-	instance := &BinanceAPI{
+	instance := &BinanceSyncAPI{
 		in: make(chan []byte),
 	}
 
@@ -54,7 +54,7 @@ func NewBinanceAPI() *BinanceAPI {
 	return instance
 }
 
-func (api *BinanceAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int) (*domain.OrderBookSnapshot, error) {
+func (api *BinanceSyncAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int) (*domain.OrderBookSnapshot, error) {
 	reqId := getRandomReqID()
 
 	// params is a object of symbol and limit
@@ -97,7 +97,7 @@ func (api *BinanceAPI) OrderBookSnapshot(symbol *domain.MarketSymbol, limit int)
 	return snapshot, nil
 }
 
-func (api *BinanceAPI) listener(conn *websocket.Conn) {
+func (api *BinanceSyncAPI) listener(conn *websocket.Conn) {
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
@@ -110,7 +110,7 @@ func (api *BinanceAPI) listener(conn *websocket.Conn) {
 
 var ErrTimeout = errors.New("timeout error")
 
-func (api *BinanceAPI) waitForResponse(messageId int) ([]byte, error) {
+func (api *BinanceSyncAPI) waitForResponse(messageId int) ([]byte, error) {
 	for {
 		select {
 		case msg := <-api.in:

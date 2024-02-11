@@ -1,4 +1,4 @@
-package interfaces
+package domain
 
 type Subscription[T any] struct {
 	Stream      chan T

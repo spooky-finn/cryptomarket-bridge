@@ -1,4 +1,4 @@
-package kucoin
+package domain
 
 import (
 	"log"
@@ -7,57 +7,60 @@ import (
 
 	"github.com/gammazero/deque"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
 )
 
 // A manager class that is responsible for maintaining the orderbook of a market.
 type OrderbookMaintainer struct {
-	orderBook *domain.OrderBook
-	syncAPI   *KucoinSyncAPI
-	streamAPI *KucoinStreamAPI
+	orderBook *OrderBook
+	syncAPI   ProviderSyncAPI
+	streamAPI ProviderStreamAPI
 
-	depthUpdateQueue deque.Deque[DepthUpdateModel]
+	depthUpdateQueue deque.Deque[*OrderBookUpdate]
 	mu               sync.Mutex
 	done             chan struct{}
 
 	OutOfSequeceErrCount int
 	wg                   sync.WaitGroup
+
+	depthUpdateValidator IDepthUpdateValidator
 }
 
-func NewOrderBookMaintainer(stream *KucoinStreamAPI) *OrderbookMaintainer {
+func NewOrderBookMaintainer(
+	stream ProviderStreamAPI,
+	syncAPI ProviderSyncAPI,
+	depthUpdateValidator IDepthUpdateValidator,
+) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
-		syncAPI:   stream.SyncAPI,
+		syncAPI:   syncAPI,
 		streamAPI: stream,
 
-		depthUpdateQueue: deque.Deque[DepthUpdateModel]{},
-		mu:               sync.Mutex{},
+		depthUpdateQueue:     deque.Deque[*OrderBookUpdate]{},
+		depthUpdateValidator: depthUpdateValidator,
+		mu:                   sync.Mutex{},
 	}
 }
 
-func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit int) *i.CreareOrderBookResult {
-	log.Printf("creating orderbook for %s on kucoin", symbol.String())
+func (m *OrderbookMaintainer) CreareOrderBook(provider string, symbol *MarketSymbol, limit int) *CreareOrderBookResult {
 	firstUpd := m.runStreamSubscriber(symbol)
 	<-firstUpd
 
 	if config.DebugMode {
-		log.Printf("subscribed to depth update stream for %s on kucoin", symbol.String())
+		log.Printf("subscribed to depth update stream, Symbol=%s on Provider=%s", symbol.String(), provider)
 	}
 
 	snapshot, err := m.syncAPI.OrderBookSnapshot(symbol, limit)
-	log.Printf("got snapshot for %s on kucoin", symbol.String())
 	if err != nil {
-		return &i.CreareOrderBookResult{
+		return &CreareOrderBookResult{
 			Err: err,
 		}
 	}
 
-	orderbook := domain.NewOrderBook("kucoin", symbol, snapshot)
+	orderbook := NewOrderBook(provider, symbol, snapshot)
 	m.orderBook = orderbook
 	go m.queueReader()
 
-	return &i.CreareOrderBookResult{
+	return &CreareOrderBookResult{
 		OrderBook: orderbook,
 		Snapshot:  snapshot,
 		Err:       nil,
@@ -73,26 +76,14 @@ func (m *OrderbookMaintainer) queueReader() {
 		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
-
-			// case when orderbook more freash that update just skip it
-			if update.SequenceEnd <= m.orderBook.LastUpdateID {
+			err := m.depthUpdateValidator.IsValidUpd(update, m.orderBook.LastUpdateID)
+			if err != nil {
+				// TODO: process what to do when update is invalid.
 				m.mu.Unlock()
 				continue
 			}
 
-			// case when update is older than last update
-			if update.SequenceStart <= m.orderBook.LastUpdateID+1 && update.SequenceEnd >= m.orderBook.LastUpdateID {
-				m.orderBook.ApplyUpdate(domain.NewOrderBookUpdate(
-					update.Changes.Bids, update.Changes.Asks, update.SequenceEnd,
-				))
-				m.mu.Unlock()
-				continue
-			} else {
-				m.OutOfSequeceErrCount++
-				if m.OutOfSequeceErrCount > 10 {
-					panic("out of sequence")
-				}
-			}
+			m.orderBook.ApplyUpdate(update)
 			m.mu.Unlock()
 		} else {
 			m.mu.Unlock()
@@ -101,7 +92,7 @@ func (m *OrderbookMaintainer) queueReader() {
 	}
 }
 
-func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <-chan struct{} {
+func (m *OrderbookMaintainer) runStreamSubscriber(symbol *MarketSymbol) <-chan struct{} {
 	fistUpdteProcessed := false
 	onFirstUpdateCh := make(chan struct{}, 1)
 
@@ -118,7 +109,7 @@ func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <
 				return
 			case update := <-subscription.Stream:
 				m.mu.Lock()
-				m.depthUpdateQueue.PushBack(*update)
+				m.depthUpdateQueue.PushBack(update)
 				m.mu.Unlock()
 
 				if !fistUpdteProcessed {

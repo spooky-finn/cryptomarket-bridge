@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 var baseEndpoints = []string{
@@ -16,10 +15,10 @@ var baseEndpoints = []string{
 type BinanceStreamAPI struct {
 	endpoint     string
 	streamClient *BinanceStreamClient
-	syncAPI      *BinanceAPI
+	syncAPI      *BinanceSyncAPI
 }
 
-type DethUpdateSubscribtion = i.Subscription[Message[DepthUpdateData]]
+type DethUpdateSubscribtion = domain.Subscription[Message[DepthUpdateData]]
 
 type DepthUpdateData struct {
 	Event         string     `json:"e"`
@@ -31,7 +30,7 @@ type DepthUpdateData struct {
 	Asks          [][]string `json:"a"`
 }
 
-func NewBinanceStreamAPI(client *BinanceStreamClient, syncAPI *BinanceAPI) *BinanceStreamAPI {
+func NewBinanceStreamAPI(client *BinanceStreamClient, syncAPI *BinanceSyncAPI) *BinanceStreamAPI {
 	return &BinanceStreamAPI{
 		endpoint:     baseEndpoints[0],
 		streamClient: client,
@@ -39,13 +38,13 @@ func NewBinanceStreamAPI(client *BinanceStreamClient, syncAPI *BinanceAPI) *Bina
 	}
 }
 
-func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*DethUpdateSubscribtion, error) {
+func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*domain.Subscription[*domain.OrderBookUpdate], error) {
 	topic := fmt.Sprintf("%s@depth", symbol.Join(""))
 	subscribtion, err := bs.streamClient.Subscribe(topic)
 	if err != nil {
 		return nil, err
 	}
-	s := make(chan Message[DepthUpdateData])
+	s := make(chan *domain.OrderBookUpdate)
 
 	go func() {
 		defer close(s)
@@ -58,21 +57,30 @@ func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*DethU
 				fmt.Printf("Error unmarshaling message: %s", err)
 			}
 
-			s <- message
+			update := domain.NewOrderBookUpdate(
+				message.Data.Bids, message.Data.Asks,
+				message.Data.FirstUpdateId, message.Data.FinalUpdateId,
+				symbol,
+			)
+			s <- update
 		}
 	}()
 
-	return &i.Subscription[Message[DepthUpdateData]]{
+	return &domain.Subscription[*domain.OrderBookUpdate]{
 		Stream:      s,
 		Unsubscribe: subscribtion.Unsubscribe,
 		Topic:       topic,
 	}, nil
 }
 
-func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *i.CreareOrderBookResult {
-	om := NewOrderBookMaintainer(bs)
+func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *domain.CreareOrderBookResult {
+	validator := &BinanceDepthUpdateValidator{
+		OutOfSequeceErrTrashold: 10,
+	}
 
-	result := om.CreareOrderBook(symbol, maxDepth)
+	maintainer := domain.NewOrderBookMaintainer(bs, bs.syncAPI, validator)
+
+	result := maintainer.CreareOrderBook("binance", symbol, maxDepth)
 	if result.Err != nil {
 		return result
 	}

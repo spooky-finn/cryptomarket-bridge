@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 const STARTING = "starting"
@@ -15,17 +14,17 @@ const STARTING = "starting"
 var logger = log.New(os.Stdout, "[orderbook-snapshot-usecase] ", log.LstdFlags)
 
 type OrderBookSnapshotUseCase struct {
-	apiResolver interfaces.ApiResolver
+	connManager domain.ConnManager
 	storage     *domain.OrderBookStorage
 
 	waitingRoom sync.Map
 }
 
 func NewOrderBookSnapshotUseCase(
-	apiResolver interfaces.ApiResolver,
+	connManager domain.ConnManager,
 ) *OrderBookSnapshotUseCase {
 	return &OrderBookSnapshotUseCase{
-		apiResolver: apiResolver,
+		connManager: connManager,
 		storage:     domain.NewOrderBookStorage(),
 
 		waitingRoom: sync.Map{},
@@ -40,13 +39,13 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	if _, ok := o.waitingRoom.Load(waitingRoomKey); ok {
 		logger.Printf("orderbook in initializing. provider`s snapshot returns. Provider=%s, Symbol=%s", provider, symbol.String())
-		return o.apiResolver.HttpApi(provider).OrderBookSnapshot(symbol, limit)
+		return o.connManager.SyncAPI(provider).OrderBookSnapshot(symbol, limit)
 	}
 
 	orderbook, err := o.storage.Get(provider, symbol)
 	if err != nil {
 		go o.createOrderBook(provider, symbol, limit)
-		return o.apiResolver.HttpApi(provider).OrderBookSnapshot(symbol, limit)
+		return o.connManager.SyncAPI(provider).OrderBookSnapshot(symbol, limit)
 	}
 
 	snapshot := orderbook.TakeSnapshot(limit)
@@ -59,7 +58,7 @@ func (o *OrderBookSnapshotUseCase) createOrderBook(
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	o.waitingRoom.Store(waitingRoomKey, STARTING)
 
-	result := o.apiResolver.StreamApi(provider).GetOrderBook(symbol, maxDeth)
+	result := o.connManager.StreamAPI(provider).GetOrderBook(symbol, maxDeth)
 	if result.Err != nil {
 		return
 	}

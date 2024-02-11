@@ -7,18 +7,18 @@ import (
 	"time"
 
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
 )
 
 type KucoinStreamAPI struct {
-	WSocket    *KucoinStreamClient
-	SyncAPI    *KucoinSyncAPI
+	WebSocket *KucoinStreamClient
+	SyncAPI   *KucoinSyncAPI
+
 	apiTimeout time.Duration
 }
 
 func NewKucoinStreamAPI(wc *KucoinStreamClient, syncAPI *KucoinSyncAPI) *KucoinStreamAPI {
 	return &KucoinStreamAPI{
-		WSocket:    wc,
+		WebSocket:  wc,
 		SyncAPI:    syncAPI,
 		apiTimeout: time.Second * 10,
 	}
@@ -37,43 +37,53 @@ type OrderBookChanges struct {
 	Bids [][]string `json:"bids"`
 }
 
-type DethUpdateSubscribtion = *i.Subscription[*DepthUpdateModel]
+type DethUpdateSubscribtion = *domain.Subscription[*domain.OrderBookUpdate]
 
-func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (DethUpdateSubscribtion, error) {
+func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*domain.Subscription[*domain.OrderBookUpdate], error) {
 	topic := fmt.Sprintf("/market/level2:%s", strings.ToUpper(symbol.Join("-")))
 	m := NewSubscribeMessage(topic, false)
-	subscribtion, err := s.WSocket.Subscribe(m)
-	out := make(chan *DepthUpdateModel)
+	subscribtion, err := s.WebSocket.Subscribe(m)
+	out := make(chan *domain.OrderBookUpdate)
 
 	go func() {
 		defer close(out)
 
 		for msg := range subscribtion.Stream {
 			message := &DepthUpdateModel{}
+
 			err := json.Unmarshal(msg, &message)
 			if err != nil {
 				logger.Printf("Error unmarshaling message: %s", err)
 			}
-			out <- message
+
+			out <- domain.NewOrderBookUpdate(
+				message.Changes.Bids, message.Changes.Asks,
+				message.SequenceStart, message.SequenceEnd,
+				symbol,
+			)
 		}
 	}()
 
-	return &i.Subscription[*DepthUpdateModel]{
+	return &domain.Subscription[*domain.OrderBookUpdate]{
 		Stream:      out,
 		Topic:       topic,
 		Unsubscribe: subscribtion.Unsubscribe,
 	}, err
 }
 
-func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *i.CreareOrderBookResult {
-	om := NewOrderBookMaintainer(s)
+func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *domain.CreareOrderBookResult {
+	validator := &KucoinDepthUpdateValidator{
+		OutOfSequeceErrTrashold: 10,
+	}
 
-	result := om.CreareOrderBook(symbol, maxDepth)
+	maintainer := domain.NewOrderBookMaintainer(s, s.SyncAPI, validator)
+
+	result := maintainer.CreareOrderBook("kucoin", symbol, maxDepth)
 	if result.Err != nil {
 		return result
 	}
 
-	return &i.CreareOrderBookResult{
+	return &domain.CreareOrderBookResult{
 		OrderBook: result.OrderBook,
 		Snapshot:  result.Snapshot,
 		Err:       nil,
