@@ -67,7 +67,6 @@ func (c *BinanceStreamClient) Connect() error {
 	conn.Dial(binanceDefaultWebsocketEndpoint, nil)
 
 	c.conn = conn
-	logger.Println("connected to binance stream websocket")
 
 	go c.read()
 	return nil
@@ -78,10 +77,7 @@ func (c *BinanceStreamClient) Subscribe(topic string) (SubscibeResult, error) {
 	defer c.mu.Unlock()
 
 	if !c.conn.IsConnected() {
-		err := c.Connect()
-		if err != nil {
-			fmt.Println("failed to connect to binance stream websocket")
-		}
+		panic("connection is not established")
 	}
 
 	entry, ok := c.subscriptions[topic]

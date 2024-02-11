@@ -11,15 +11,15 @@ import (
 )
 
 type KucoinStreamAPI struct {
-	wc         *KucoinStreamClient
-	syncAPI    *KucoinSyncAPI
+	WSocket    *KucoinStreamClient
+	SyncAPI    *KucoinSyncAPI
 	apiTimeout time.Duration
 }
 
 func NewKucoinStreamAPI(wc *KucoinStreamClient, syncAPI *KucoinSyncAPI) *KucoinStreamAPI {
 	return &KucoinStreamAPI{
-		wc:         wc,
-		syncAPI:    syncAPI,
+		WSocket:    wc,
+		SyncAPI:    syncAPI,
 		apiTimeout: time.Second * 10,
 	}
 }
@@ -42,7 +42,7 @@ type DethUpdateSubscribtion = *i.Subscription[*DepthUpdateModel]
 func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (DethUpdateSubscribtion, error) {
 	topic := fmt.Sprintf("/market/level2:%s", strings.ToUpper(symbol.Join("-")))
 	m := NewSubscribeMessage(topic, false)
-	subscribtion, err := s.wc.Subscribe(m)
+	subscribtion, err := s.WSocket.Subscribe(m)
 	out := make(chan *DepthUpdateModel)
 
 	go func() {
@@ -52,7 +52,7 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (DethUpda
 			message := &DepthUpdateModel{}
 			err := json.Unmarshal(msg, &message)
 			if err != nil {
-				fmt.Printf("Error unmarshaling message: %s", err)
+				logger.Printf("Error unmarshaling message: %s", err)
 			}
 			out <- message
 		}

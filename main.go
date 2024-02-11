@@ -46,36 +46,4 @@ func main() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-
-	// syncAPI := kucoin.NewKucoinSyncAPI()
-	// token, err := syncAPI.WsConnOpts()
-	// if err != nil {
-	// 	fmt.Printf("Error while creating ws connection options %s", err.Error())
-	// 	panic(err)
-	// }
-	// kucoinStreamClien := kucoin.NewKucoinStreamClient(token)
-	// _, _, err = kucoinStreamClien.Connect()
-	// if err != nil {
-	// 	fmt.Printf("Error while connecting to kucoin %s", err.Error())
-	// 	panic(err)
-	// }
-
-	// streamAPI := kucoin.NewKucoinStreamAPI(kucoinStreamClien, syncAPI)
-	// s, err := domain.NewMarketSymbolFromString("BTC_USDT")
-	// if err != nil {
-	// 	fmt.Printf("Error while creating market symbol %s", err.Error())
-	// 	panic(err)
-	// }
-	// subscribtion, err := streamAPI.DepthDiffStream(s)
-	// if err != nil {
-	// 	fmt.Printf("Error while subscribing to kucoin %s", err.Error())
-	// 	panic(err)
-	// }
-
-	// for {
-	// 	select {
-	// 	case msg := <-subscribtion.Stream:
-	// 		fmt.Println("depth strea: ", string(msg.Symbol))
-	// 	}
-	// }
 }

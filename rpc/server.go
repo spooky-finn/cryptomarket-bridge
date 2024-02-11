@@ -13,10 +13,11 @@ type server struct {
 }
 
 func NewServer(conf *ValidationServiceConfig) *server {
-	apiResolver := provider.NewAPIResolver()
+	connManager := provider.NewConnectionManager()
+	connManager.Init()
 
 	return &server{
-		orderbookSnapshotUseCase: usecase.NewOrderBookSnapshotUseCase(apiResolver),
+		orderbookSnapshotUseCase: usecase.NewOrderBookSnapshotUseCase(connManager),
 		validationService:        NewValidationService(conf),
 	}
 }

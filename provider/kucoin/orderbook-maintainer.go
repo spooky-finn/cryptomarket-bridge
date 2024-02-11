@@ -2,18 +2,19 @@ package kucoin
 
 import (
 	"log"
-	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	i "github.com/spooky-finn/go-cryptomarkets-bridge/domain/interfaces"
+	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
 )
 
 // A manager class that is responsible for maintaining the orderbook of a market.
 type OrderbookMaintainer struct {
-	ob        *domain.OrderBook
+	orderBook *domain.OrderBook
 	syncAPI   *KucoinSyncAPI
 	streamAPI *KucoinStreamAPI
 
@@ -21,13 +22,13 @@ type OrderbookMaintainer struct {
 	mu               sync.Mutex
 	done             chan struct{}
 
-	firstUpdateApplied   bool
 	OutOfSequeceErrCount int
+	wg                   sync.WaitGroup
 }
 
 func NewOrderBookMaintainer(stream *KucoinStreamAPI) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
-		syncAPI:   stream.syncAPI,
+		syncAPI:   stream.SyncAPI,
 		streamAPI: stream,
 
 		depthUpdateQueue: deque.Deque[DepthUpdateModel]{},
@@ -53,7 +54,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(symbol *domain.MarketSymbol, limit
 	}
 
 	orderbook := domain.NewOrderBook("kucoin", symbol, snapshot)
-	m.ob = orderbook
+	m.orderBook = orderbook
 	go m.queueReader()
 
 	return &i.CreareOrderBookResult{
@@ -73,54 +74,31 @@ func (m *OrderbookMaintainer) queueReader() {
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
 
-			// FIXME: WTF WHY THIS EMTY UPDATES
-			// Drop any event where u is <= lastUpdateId in the snapshot
-
-			//  to the local snapshot to ensure that sequenceStart(new)<=sequenceEnd+1(old) and sequenceEnd(new) > sequenceEnd(old).
-			if !m.firstUpdateApplied &&
-				(update.SequenceStart <= m.ob.LastUpdateID+1 && update.SequenceEnd >= m.ob.LastUpdateID) {
-				m.applyFirstUpdate(m.ob, &update)
+			// case when orderbook more freash that update just skip it
+			if update.SequenceEnd <= m.orderBook.LastUpdateID {
 				m.mu.Unlock()
 				continue
 			}
 
-			if m.firstUpdateApplied {
-				// TODO: add seq
-				//  to the local snapshot to ensure that sequenceStart(new)<=sequenceEnd+1(old) and sequenceEnd(new) > sequenceEnd(old).
-				m.ob.ApplyUpdate(domain.NewOrderBookUpdate(
+			// case when update is older than last update
+			if update.SequenceStart <= m.orderBook.LastUpdateID+1 && update.SequenceEnd >= m.orderBook.LastUpdateID {
+				m.orderBook.ApplyUpdate(domain.NewOrderBookUpdate(
 					update.Changes.Bids, update.Changes.Asks, update.SequenceEnd,
 				))
+				m.mu.Unlock()
+				continue
+			} else {
+				m.OutOfSequeceErrCount++
+				if m.OutOfSequeceErrCount > 10 {
+					panic("out of sequence")
+				}
 			}
-		}
-		m.mu.Unlock()
-	}
-}
-
-func (m *OrderbookMaintainer) applyFirstUpdate(orderbook *domain.OrderBook, update *DepthUpdateModel) {
-	asks := m.selectFromUpdatEventsLaterThan(update.Changes.Asks, orderbook.LastUpdateID)
-	bids := m.selectFromUpdatEventsLaterThan(update.Changes.Bids, orderbook.LastUpdateID)
-
-	orderbook.ApplyUpdate(domain.NewOrderBookUpdate(
-		bids, asks, update.SequenceEnd,
-	))
-	m.firstUpdateApplied = true
-}
-
-func (m *OrderbookMaintainer) selectFromUpdatEventsLaterThan(depth [][]string, lastUpdateID int64) [][]string {
-	new := make([][]string, 0)
-
-	for _, ask := range depth {
-		seq, err := strconv.ParseInt(ask[2], 10, 64)
-		if err != nil {
-			panic(err)
-		}
-
-		if seq > lastUpdateID {
-			new = append(new, ask)
+			m.mu.Unlock()
+		} else {
+			m.mu.Unlock()
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
-
-	return new
 }
 
 func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <-chan struct{} {
@@ -132,6 +110,7 @@ func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <
 		logger.Fatalf("error while subscribing to depth update stream  " + err.Error())
 	}
 
+	m.wg.Add(2)
 	go func() {
 		for {
 			select {
@@ -140,16 +119,28 @@ func (m *OrderbookMaintainer) runStreamSubscriber(symbol *domain.MarketSymbol) <
 			case update := <-subscription.Stream:
 				m.mu.Lock()
 				m.depthUpdateQueue.PushBack(*update)
+				m.mu.Unlock()
 
 				if !fistUpdteProcessed {
 					onFirstUpdateCh <- struct{}{}
-					fistUpdteProcessed = true
 					close(onFirstUpdateCh)
+					fistUpdteProcessed = true
 				}
-				m.mu.Unlock()
 			}
 		}
 	}()
 
-	return onFirstUpdateCh
+	return helpers.WithLatestFrom(onFirstUpdateCh, TimeToEmtyChan(time.After(1*time.Second)))
+}
+
+func TimeToEmtyChan(in <-chan time.Time) chan struct{} {
+	out := make(chan struct{}, 1)
+
+	go func() {
+		for range in {
+			out <- struct{}{}
+		}
+	}()
+
+	return out
 }

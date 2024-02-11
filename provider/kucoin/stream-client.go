@@ -124,11 +124,11 @@ type KucoinStreamClient struct {
 	pintInterval    time.Duration
 	pingTimeout     time.Duration
 
-	clients map[string]chan []byte
+	clients  map[string]chan []byte
+	tunnelId string
 }
 
 func NewKucoinStreamClient(token *WebSocketTokenModel) *KucoinStreamClient {
-	logger.Printf("token: %#v", token.Servers[0])
 	return &KucoinStreamClient{
 		wg: &sync.WaitGroup{},
 		// errors:   make(chan error, 1),
@@ -139,7 +139,7 @@ func NewKucoinStreamClient(token *WebSocketTokenModel) *KucoinStreamClient {
 
 		done:            make(chan struct{}),
 		enableHeartbeat: false,
-		pintInterval:    time.Duration(token.Servers[0].PingInterval) * time.Millisecond,
+		pintInterval:    10 * time.Second,
 		pingTimeout:     time.Duration(token.Servers[0].PingTimeout) * time.Millisecond,
 		clients:         make(map[string]chan []byte),
 	}
@@ -148,11 +148,14 @@ func NewKucoinStreamClient(token *WebSocketTokenModel) *KucoinStreamClient {
 func (c *KucoinStreamClient) Connect() error {
 	dialer := &websocket.Dialer{
 		Proxy:           http.ProxyFromEnvironment,
-		ReadBufferSize:  2048,
-		WriteBufferSize: 2048,
+		ReadBufferSize:  512,
+		WriteBufferSize: 256,
 	}
 
 	url := fmt.Sprintf("%s?token=%s", c.token.Servers[0].Endpoint, c.token.Token)
+	if config.DebugMode {
+		logger.Printf("connection to the kucoin stream websocket: %s\n", url)
+	}
 	conn, httpResp, err := dialer.Dial(url, nil)
 	if err != nil {
 		return errors.Wrapf(err, "Failed to dial to the kucoin stream websocket. status: %s", httpResp.Status)
@@ -167,13 +170,11 @@ func (c *KucoinStreamClient) Connect() error {
 		}
 
 		if m.Type == ErrorMessage {
-			if config.DebugMode {
-				logger.Println("Kucoin error:", m)
-			}
+			logger.Println("Kucoin error:", m)
 			return errors.Errorf("Error message: %s", helpers.ToJsonString(m))
 		}
 		if m.Type == WelcomeMessage {
-			logger.Println("connected to the kucoin stream websocket")
+			logger.Println("connected to the kucoin stream websocket", m.WebSocketMessage)
 			break
 		}
 	}
@@ -227,17 +228,20 @@ func (c *KucoinStreamClient) Close() error {
 }
 
 func (c *KucoinStreamClient) CreateMultiplexTunnel(tunnelId string) error {
+	c.tunnelId = tunnelId
+	mId := getMsgId()
 	err := c.SendMessage(map[string]interface{}{
-		"id":       getMsgId(),
-		"type":     "openTunnel",
-		"response": true,
+		"id":          mId,
+		"type":        "openTunnel",
+		"newTunnelId": tunnelId,
+		"response":    true,
 	})
 
 	if err != nil {
 		return err
 	}
 
-	return c.waitForAck(tunnelId)
+	return c.waitForAck(mId)
 }
 
 func (c *KucoinStreamClient) waitForAck(msgId string) error {
@@ -245,14 +249,14 @@ func (c *KucoinStreamClient) waitForAck(msgId string) error {
 		select {
 		case id := <-c.acks:
 			if id != msgId {
-				return errors.Errorf("Invalid ack id %s, expect %s", id, msgId)
+				return errors.Errorf("Invalid ack id (%s), expect (%s)", id, msgId)
 			}
 			if config.DebugMode {
-				logger.Printf("Received ack message %s\n", id)
+				logger.Printf("received ack message: %s\n", id)
 			}
 			return nil
 		case <-time.After(kucoinDefaultTimeout):
-			return errors.Errorf("Wait ack message timeout in %v", kucoinDefaultTimeout)
+			return errors.Errorf("triggered wait ack message timeout in %v", kucoinDefaultTimeout)
 		}
 	}
 }
@@ -272,6 +276,10 @@ func (c *KucoinStreamClient) read() {
 			if err := c.conn.ReadJSON(m); err != nil {
 				logger.Fatalf("err while reading message from web conn: %s", err.Error())
 				return
+			}
+
+			if config.DebugMode {
+				logger.Println("Received message: ", string(m.RawData))
 			}
 
 			switch m.Type {
@@ -312,7 +320,7 @@ func (c *KucoinStreamClient) keepHeartbeat() {
 		panic("Heartbeat interval is not set")
 	}
 
-	pt := time.NewTicker(10 * time.Second)
+	pt := time.NewTicker(c.pintInterval)
 	defer c.wg.Done()
 	defer pt.Stop()
 
