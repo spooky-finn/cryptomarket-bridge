@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/recws-org/recws"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/cryptobridge/domain"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	gen "github.com/spooky-finn/go-cryptomarkets-bridge/gen"
+	"github.com/spooky-finn/cryptobridge/domain"
+	gen "github.com/spooky-finn/cryptobridge/gen"
 )
 
 var logger = log.New(os.Stdout, "rpc: ", log.LstdFlags)

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/cryptobridge/domain"
 )
 
 type KucoinStreamAPI struct {

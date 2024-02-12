@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/cryptobridge/domain"
 )
 
 const STARTING = "starting"

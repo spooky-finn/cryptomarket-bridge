@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/Kucoin/kucoin-go-sdk"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/cryptobridge/domain"
 )
 
 var logger = log.New(log.Writer(), "[kucoin] ", log.LstdFlags)

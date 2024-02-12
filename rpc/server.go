@@ -1,9 +1,9 @@
 package rpc
 
 import (
-	gen "github.com/spooky-finn/go-cryptomarkets-bridge/gen"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/provider"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/usecase"
+	gen "github.com/spooky-finn/cryptobridge/gen"
+	"github.com/spooky-finn/cryptobridge/provider"
+	"github.com/spooky-finn/cryptobridge/usecase"
 )
 
 type server struct {

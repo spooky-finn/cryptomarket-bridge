@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/joho/godotenv"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+	"github.com/spooky-finn/cryptobridge/domain"
 	"github.com/stretchr/testify/assert"
 )
 

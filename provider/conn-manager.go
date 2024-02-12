@@ -5,9 +5,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/provider/binance"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/provider/kucoin"
+	"github.com/spooky-finn/cryptobridge/domain"
+	"github.com/spooky-finn/cryptobridge/provider/binance"
+	"github.com/spooky-finn/cryptobridge/provider/kucoin"
 )
 
 var logger = log.New(os.Stdout, "[api-resolver] ", log.LstdFlags)

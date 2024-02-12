@@ -10,9 +10,9 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
+	"github.com/spooky-finn/cryptobridge/config"
+	"github.com/spooky-finn/cryptobridge/domain"
+	"github.com/spooky-finn/cryptobridge/helpers"
 
 	"github.com/gorilla/websocket"
 )

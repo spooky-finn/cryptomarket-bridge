@@ -1,6 +1,6 @@
 package binance
 
-import "github.com/spooky-finn/go-cryptomarkets-bridge/domain"
+import "github.com/spooky-finn/cryptobridge/domain"
 
 type BinanceDepthUpdateValidator struct{}
 

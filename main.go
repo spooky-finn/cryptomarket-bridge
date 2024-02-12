@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
-	gen "github.com/spooky-finn/go-cryptomarkets-bridge/gen"
-	promclient "github.com/spooky-finn/go-cryptomarkets-bridge/infrastructure/prometheus"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/rpc"
+	"github.com/spooky-finn/cryptobridge/config"
+	gen "github.com/spooky-finn/cryptobridge/gen"
+	promclient "github.com/spooky-finn/cryptobridge/infrastructure/prometheus"
+	"github.com/spooky-finn/cryptobridge/rpc"
 	"google.golang.org/grpc"
 )
 

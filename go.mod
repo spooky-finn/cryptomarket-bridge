@@ -1,4 +1,4 @@
-module github.com/spooky-finn/go-cryptomarkets-bridge
+module github.com/spooky-finn/cryptobridge
 
 go 1.20
 

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	promclient "github.com/spooky-finn/go-cryptomarkets-bridge/infrastructure/prometheus"
+	promclient "github.com/spooky-finn/cryptobridge/infrastructure/prometheus"
 )
 
 var logger = log.New(os.Stdout, "[orderbook-storage] ", log.LstdFlags)

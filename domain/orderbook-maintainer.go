@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gammazero/deque"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/config"
-	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
+	"github.com/spooky-finn/cryptobridge/config"
+	"github.com/spooky-finn/cryptobridge/helpers"
 )
 
 // A manager class that is responsible for maintaining (i.e. updating) the orderbook of a market.
@@ -80,6 +80,7 @@ func (m *OrderbookMaintainer) queueReader() {
 		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
+
 			err := m.depthUpdateValidator.IsValidUpd(update, m.orderBook.LastUpdateID)
 			if err != nil {
 				// TODO: process what to do when update is invalid.
