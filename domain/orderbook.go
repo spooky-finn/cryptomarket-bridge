@@ -83,7 +83,6 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 
 	if update.SequenceEnd <= ob.LastUpdateID {
 		panic("fail to apply update. wrong sequence")
-		return
 	}
 
 	// TODO: add check for sequenciality of updates

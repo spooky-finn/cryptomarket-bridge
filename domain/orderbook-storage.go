@@ -68,10 +68,10 @@ func (o *OrderBookStorage) OrderBookCount(provider string) int {
 	return len(o.storage[provider])
 }
 
-func (o *OrderBookStorage) Remove(provider string, symbol *MarketSymbol) {
+func (o *OrderBookStorage) Remove(provider string, symbol *MarketSymbol) error {
 	o.mu.Lock()
 	if _, ok := o.storage[provider]; !ok {
-		return
+		return errors.New("provider not found")
 	}
 
 	delete(o.storage[provider], symbol.String())
@@ -79,6 +79,7 @@ func (o *OrderBookStorage) Remove(provider string, symbol *MarketSymbol) {
 
 	promclient.BinanceOpenOrderBookGauge.Set(float64(o.OrderBookCount("binance")))
 	promclient.KucoinOpenOrderBookGauge.Set(float64(o.OrderBookCount("kucoin")))
+	return nil
 }
 
 func (o *OrderBookStorage) runGC() {
@@ -88,7 +89,11 @@ func (o *OrderBookStorage) runGC() {
 			for symbol, orderBook := range symbols {
 				if orderBook.status == OrderBookStatus_Oudated {
 					logger.Printf("cleaning outdated order book: %s %s\n", provider, symbol)
-					o.Remove(provider, orderBook.Symbol)
+					err := o.Remove(provider, orderBook.Symbol)
+
+					if err != nil {
+						logger.Printf("failed to remove outdated order book: %s %s, %s\n", provider, symbol, err)
+					}
 				}
 			}
 

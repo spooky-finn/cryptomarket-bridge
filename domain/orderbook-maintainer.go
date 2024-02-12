@@ -83,23 +83,10 @@ func (m *OrderbookMaintainer) queueReader() {
 		m.mu.Lock()
 		if m.depthUpdateQueue.Len() > 0 {
 			update := m.depthUpdateQueue.PopFront()
-
 			err := m.depthUpdateValidator.IsValidUpd(update, m.orderBook.LastUpdateID)
 			if err != nil {
 				// TODO: process what to do when update is invalid.
-				if m.depthUpdateValidator.IsErrOutOfSequece(err) {
-					m.OutOfSequeceErrCount++
-				}
-
-				if m.OutOfSequeceErrCount > config.OrderBookOutOfSequeceErrThreshold {
-					fmt.Printf("orderbook outdated and stopped. Provider=%s, Symbol=%s", m.orderBook.Provider, m.orderBook.Symbol.String())
-					m.orderBook.StatusOutdated()
-
-					m.mu.Unlock()
-					m.Stop()
-					return
-				}
-
+				m.checkOutOfSequeceErr(err)
 				m.mu.Unlock()
 				continue
 			}
@@ -110,6 +97,19 @@ func (m *OrderbookMaintainer) queueReader() {
 			m.mu.Unlock()
 			time.Sleep(100 * time.Millisecond)
 		}
+	}
+}
+
+func (m *OrderbookMaintainer) checkOutOfSequeceErr(err error) {
+	if m.depthUpdateValidator.IsErrOutOfSequece(err) {
+		m.OutOfSequeceErrCount++
+	}
+
+	if m.OutOfSequeceErrCount > config.OrderBookOutOfSequeceErrThreshold {
+		fmt.Printf("orderbook outdated and stopped. Provider=%s, Symbol=%s", m.orderBook.Provider, m.orderBook.Symbol.String())
+		m.orderBook.StatusOutdated()
+
+		m.Stop()
 	}
 }
 

@@ -64,6 +64,39 @@ func TestOrderBook_ApplyUpdate(t *testing.T) {
 	assert.Equal(t, [][]float64{{10000, 1}, {9900.0, 2.0}, {9800.0, 3.0}}, ob.Bids, "Bids should match")
 }
 
+func TestOrderBook_ApplyUpdate_Zero(t *testing.T) {
+	// Mock data for testing
+	provider := "MockProvider"
+	symbol, err := NewMarketSymbol("BTC", "USDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := &OrderBookSnapshot{
+		LastUpdateId: 123,
+		Bids:         [][]string{{"10000", "1"}, {"9900", "2"}},
+		Asks:         [][]string{{"10.300", "1.5"}, {"10200", "2.5"}},
+	}
+	update := &OrderBookUpdate{
+		SequenceEnd: 124,
+		Bids:        [][]string{{"9900", "0"}},                 // adding new bid
+		Asks:        [][]string{{"10.3", "0"}, {"10.10", "0"}}, // updating and removing ask
+	}
+
+	// Create a new OrderBook instance
+	ob := NewOrderBook(provider, symbol, snapshot)
+
+	// Apply the update
+	ob.ApplyUpdate(update)
+
+	// Assertions
+	assert.Equal(t, update.SequenceEnd, ob.LastUpdateID, "LastUpdateID should match")
+	assert.NotEmpty(t, ob.Asks, "Asks should not be empty")
+	assert.NotEmpty(t, ob.Bids, "Bids should not be empty")
+	assert.Equal(t, [][]float64{{10200, 2.5}}, ob.Asks, "Asks should match")
+	assert.Equal(t, [][]float64{{10000, 1}}, ob.Bids, "Bids should match")
+}
+
 func TestOrderBook_TakeSnapshot(t *testing.T) {
 	// Mock data for testing
 	provider := "MockProvider"
@@ -143,5 +176,4 @@ func TestLimitDepth(t *testing.T) {
 
 	assert.Equal(t, len(bids), 1, "Bids should be limited to 1")
 	assert.Equal(t, len(asks), 1, "Asks should be limited to 1")
-
 }
