@@ -90,6 +90,8 @@ func (m *OrderbookMaintainer) queueReader() {
 				if m.OutOfSequeceErrCount > config.OrderBookOutOfSequeceErrThreshold {
 					fmt.Printf("orderbook outdated and stopped. Provider=%s, Symbol=%s", m.orderBook.Provider, m.orderBook.Symbol.String())
 					m.orderBook.StatusOutdated()
+
+					m.mu.Unlock()
 					m.Stop()
 					m.wg.Done()
 					return
