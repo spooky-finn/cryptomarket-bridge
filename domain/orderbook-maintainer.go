@@ -59,6 +59,8 @@ func (m *OrderbookMaintainer) CreareOrderBook(provider string, symbol *MarketSym
 
 	orderbook := NewOrderBook(provider, symbol, snapshot)
 	m.orderBook = orderbook
+
+	m.wg.Add(1)
 	go m.queueReader()
 
 	return &CreareOrderBookResult{
@@ -70,6 +72,7 @@ func (m *OrderbookMaintainer) CreareOrderBook(provider string, symbol *MarketSym
 
 func (m *OrderbookMaintainer) Stop() {
 	close(m.done)
+	m.wg.Wait()
 }
 
 func (m *OrderbookMaintainer) queueReader() {
@@ -88,6 +91,8 @@ func (m *OrderbookMaintainer) queueReader() {
 					fmt.Printf("orderbook outdated and stopped. Provider=%s, Symbol=%s", m.orderBook.Provider, m.orderBook.Symbol.String())
 					m.orderBook.StatusOutdated()
 					m.Stop()
+					m.wg.Done()
+					return
 				}
 
 				m.mu.Unlock()
@@ -117,6 +122,7 @@ func (m *OrderbookMaintainer) runStreamSubscriber(symbol *MarketSymbol) <-chan s
 		for {
 			select {
 			case <-m.done:
+				m.wg.Done()
 				return
 			case update := <-subscription.Stream:
 				m.mu.Lock()

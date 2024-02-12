@@ -38,7 +38,7 @@ func TestNewSymbolFromString(t *testing.T) {
 		symbol      string
 		expectError bool
 	}{
-		{"ValidString", "BTC/USDT", false},
+		{"ValidString", "BTC_USDT", false},
 		{"InvalidString", "ETH-USD", true},
 		{"EmptyString", "", true},
 	}
@@ -58,11 +58,11 @@ func TestNewSymbolFromString(t *testing.T) {
 
 func TestMarketSymbol_Join(t *testing.T) {
 	ms := domain.MarketSymbol{BaseAsset: "BTC", QuoteAsset: "USDT"}
-	separator := "/"
+	separator := "_"
 
 	result := ms.Join(separator)
 
-	expected := "BTC/USDT"
+	expected := "BTC_USDT"
 	assert.Equal(t, expected, result, "Join() result should be equal to expected")
 }
 
@@ -71,7 +71,7 @@ func TestMarketSymbol_String(t *testing.T) {
 
 	result := ms.String()
 
-	expected := "BTC/USDT"
+	expected := "BTC_USDT"
 	assert.Equal(t, expected, result, "String() result should be equal to expected")
 }
 
@@ -92,6 +92,6 @@ func TestMarketSymbol_LovercaseConvertion(t *testing.T) {
 
 	result := ms.String()
 
-	expected := "btc/usdt"
+	expected := "btc_usdt"
 	assert.Equal(t, expected, result, "String() result should be equal to expected")
 }

@@ -89,8 +89,8 @@ func TestKucoinStreamAPIDepthStream(t *testing.T) {
 	update := <-subscription.Stream
 
 	fmt.Printf("Update: %#v\n", update)
-	if update.Symbol.String() != "BTC-USDT" {
-		t.Errorf("Symbol should be btc-usdt")
+	if update.Symbol.String() != "btc_usdt" {
+		t.Errorf("Symbol should be btc_usdt")
 	}
 
 	// Cleanup - close the connection

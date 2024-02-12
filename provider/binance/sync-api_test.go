@@ -3,11 +3,15 @@ package binance
 import (
 	"testing"
 
+	"github.com/joho/godotenv"
 	"github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBinanceWSAPI_GetOrderBookSnapshot(t *testing.T) {
+	if err := godotenv.Load("../../.env"); err != nil {
+		t.Fatal(err)
+	}
 	// Create a new BinanceWSAPI instance
 	api := NewBinanceAPI()
 
