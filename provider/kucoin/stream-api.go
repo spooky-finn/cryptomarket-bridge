@@ -71,12 +71,12 @@ func (s *KucoinStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*domain.
 	}, err
 }
 
-func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *domain.CreareOrderBookResult {
+func (s *KucoinStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *domain.CreareOrderBookResult {
 	validator := &KucoinDepthUpdateValidator{}
 
 	maintainer := domain.NewOrderBookMaintainer(s, s.SyncAPI, validator)
 
-	result := maintainer.CreareOrderBook("kucoin", symbol, maxDepth)
+	result := maintainer.CreareOrderBook("kucoin", symbol)
 	if result.Err != nil {
 		return result
 	}

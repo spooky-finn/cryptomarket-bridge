@@ -38,13 +38,13 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 	// If local orderbook in the initialization process, return the snapshot from the provider api.
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	if _, ok := o.waitingRoom.Load(waitingRoomKey); ok {
-		logger.Printf("orderbook in initializing. provider`s snapshot returns. Provider=%s, Symbol=%s", provider, symbol.String())
+		logger.Printf("orderbook is initing. provider`s snapshot returns: Provider=%s, Symbol=%s", provider, symbol.String())
 		return o.connManager.SyncAPI(provider).OrderBookSnapshot(symbol, limit)
 	}
 
 	orderbook, err := o.storage.Get(provider, symbol)
 	if err != nil {
-		go o.createOrderBook(provider, symbol, limit)
+		go o.createOrderBook(provider, symbol)
 		return o.connManager.SyncAPI(provider).OrderBookSnapshot(symbol, limit)
 	}
 
@@ -53,12 +53,12 @@ func (o *OrderBookSnapshotUseCase) GetOrderBookSnapshot(
 }
 
 func (o *OrderBookSnapshotUseCase) createOrderBook(
-	provider string, symbol *domain.MarketSymbol, maxDeth int,
+	provider string, symbol *domain.MarketSymbol,
 ) {
 	waitingRoomKey := o.getWaitingRoomKey(provider, symbol)
 	o.waitingRoom.Store(waitingRoomKey, STARTING)
 
-	result := o.connManager.StreamAPI(provider).GetOrderBook(symbol, maxDeth)
+	result := o.connManager.StreamAPI(provider).GetOrderBook(symbol)
 	if result.Err != nil {
 		return
 	}

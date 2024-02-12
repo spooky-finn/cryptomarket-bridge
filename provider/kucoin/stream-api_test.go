@@ -52,7 +52,7 @@ func TestKucoinStreamAPIGetOrderBook(t *testing.T) {
 	}
 
 	// Cleanup - close the connection
-	result := streamAPI.GetOrderBook(symbol, 50)
+	result := streamAPI.GetOrderBook(symbol)
 	if result.Err != nil {
 		t.Errorf("Error while creating orderBook %s", result.Err.Error())
 	}

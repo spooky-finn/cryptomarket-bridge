@@ -42,8 +42,8 @@ const getMarket = (provider) => {
 }
 
 export const options = {  
-  vus: 2,
-  duration: '3h',
+  vus: 3,
+  duration: '1m',
   thresholds: {
     http_req_duration: ['p(95)<1000'],
   },
@@ -59,7 +59,9 @@ export default () => {
   
   const provider = getProvider();
   const market = getMarket(provider);
-  const data = { provider, market, maxDepth: "2" };
+  const [baseAsste, quouteAsset] = market.split("/")
+
+  const data = { provider, market: `${baseAsste}_${quouteAsset}`, maxDepth: "2" };
   console.log(`requested for ${provider} ${market}`)
   const response = client.invoke('CryptoBridge.MarketDataService/GetOrderBookSnapshot', data);
 
@@ -67,6 +69,11 @@ export default () => {
   check(response.message, {
     'bids length > 0': (r) => r && r.bids ,
   });
+
+  check(response.message, {
+    'source != Unknown': (r) => r.source !== "Unknown",
+  })
+
   console.log(`response for ${provider} ${market}: `, response.message)
 
 

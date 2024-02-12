@@ -39,18 +39,21 @@ func NewOrderBookMaintainer(
 		depthUpdateQueue:     deque.Deque[*OrderBookUpdate]{},
 		OutOfSequeceErrCount: 0,
 		mu:                   sync.Mutex{},
+
+		done: make(chan struct{}),
 	}
 }
 
-func (m *OrderbookMaintainer) CreareOrderBook(provider string, symbol *MarketSymbol, limit int) *CreareOrderBookResult {
+func (m *OrderbookMaintainer) CreareOrderBook(provider string, symbol *MarketSymbol) *CreareOrderBookResult {
 	firstUpd := m.runStreamSubscriber(symbol)
 	<-firstUpd
 
 	if config.DebugMode {
 		log.Printf("subscribed to depth update stream, Symbol=%s on Provider=%s", symbol.String(), provider)
+		log.Printf("requesting orderbook snapshot: Symbol=%s, MaxDepth=%d", symbol, config.OrderBookMaxSupportedDepth)
 	}
 
-	snapshot, err := m.syncAPI.OrderBookSnapshot(symbol, limit)
+	snapshot, err := m.syncAPI.OrderBookSnapshot(symbol, config.OrderBookMaxSupportedDepth)
 	if err != nil {
 		return &CreareOrderBookResult{
 			Err: err,
@@ -94,7 +97,6 @@ func (m *OrderbookMaintainer) queueReader() {
 
 					m.mu.Unlock()
 					m.Stop()
-					m.wg.Done()
 					return
 				}
 

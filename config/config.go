@@ -1,6 +1,8 @@
 package config
 
 var (
-	DebugMode                         = false
+	DebugMode = false
+
+	OrderBookMaxSupportedDepth        = 100
 	OrderBookOutOfSequeceErrThreshold = 10
 )

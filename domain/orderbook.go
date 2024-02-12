@@ -82,6 +82,7 @@ func (ob *OrderBook) ApplyUpdate(update *OrderBookUpdate) {
 	defer ob.updateMx.Unlock()
 
 	if update.SequenceEnd <= ob.LastUpdateID {
+		panic("fail to apply update. wrong sequence")
 		return
 	}
 

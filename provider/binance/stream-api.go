@@ -73,11 +73,11 @@ func (bs *BinanceStreamAPI) DepthDiffStream(symbol *domain.MarketSymbol) (*domai
 	}, nil
 }
 
-func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol, maxDepth int) *domain.CreareOrderBookResult {
+func (bs *BinanceStreamAPI) GetOrderBook(symbol *domain.MarketSymbol) *domain.CreareOrderBookResult {
 	validator := &BinanceDepthUpdateValidator{}
 	maintainer := domain.NewOrderBookMaintainer(bs, bs.syncAPI, validator)
 
-	result := maintainer.CreareOrderBook("binance", symbol, maxDepth)
+	result := maintainer.CreareOrderBook("binance", symbol)
 	if result.Err != nil {
 		return result
 	}

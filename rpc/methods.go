@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/spooky-finn/cryptobridge/config"
 	"github.com/spooky-finn/cryptobridge/domain"
 	gen "github.com/spooky-finn/cryptobridge/gen"
 )
@@ -15,6 +16,10 @@ var logger = log.New(os.Stdout, "rpc: ", log.LstdFlags)
 func (s *server) GetOrderBookSnapshot(ctx context.Context, in *gen.GetOrderBookSnapshotRequest) (*gen.GetOrderBookSnapshotResponse, error) {
 	if !s.validationService.IsSupportedProvider(in.Provider) {
 		return nil, fmt.Errorf("provider %s is not supported", in.Provider)
+	}
+
+	if in.MaxDepth > int32(config.OrderBookMaxSupportedDepth) {
+		return nil, fmt.Errorf("max suppored depth is %d", config.OrderBookMaxSupportedDepth)
 	}
 
 	marketSymbol, err := domain.NewMarketSymbolFromString(in.Market)

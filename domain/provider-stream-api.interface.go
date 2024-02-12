@@ -11,6 +11,6 @@ type CreareOrderBookResult struct {
 }
 
 type ProviderStreamAPI interface {
-	GetOrderBook(marketSymbol *MarketSymbol, maxDepth int) *CreareOrderBookResult
+	GetOrderBook(marketSymbol *MarketSymbol) *CreareOrderBookResult
 	DepthDiffStream(marketSymbol *MarketSymbol) (*Subscription[*OrderBookUpdate], error)
 }

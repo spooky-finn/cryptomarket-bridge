@@ -29,7 +29,7 @@ func NewMarketSymbolFromString(s string) (*MarketSymbol, error) {
 	split := strings.Split(s, "_")
 
 	if len(split) != 2 {
-		return nil, fmt.Errorf("invalid symbol string")
+		return nil, fmt.Errorf("invalid symbol %s", s)
 	}
 
 	base := split[0]

@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	port               = flag.Int("port", 50051, "The server port")
-	availableProviders = flag.String("providers", "binance,kucoin", "The available providers")
-	debugMode          = flag.Bool("v", false, "Enable debug mode")
+	port                       = flag.Int("port", 50051, "The server port")
+	availableProviders         = flag.String("providers", "binance,kucoin", "The available providers")
+	debugMode                  = flag.Bool("v", false, "Enable debug mode")
+	orderBookMaxSupportedDepth = flag.Int("max-orderbook-depth", 1000, "The maximum rows in the orderbook to guaranelly be served")
 )
 
 func main() {
@@ -27,6 +28,8 @@ func main() {
 	go promclient.StartPromClientServer()
 
 	config.DebugMode = *debugMode
+	config.OrderBookMaxSupportedDepth = *orderBookMaxSupportedDepth
+
 	if config.DebugMode {
 		log.Println("Debug mode enabled")
 	}
