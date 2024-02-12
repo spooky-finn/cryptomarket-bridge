@@ -10,20 +10,19 @@ import (
 	"github.com/spooky-finn/go-cryptomarkets-bridge/helpers"
 )
 
-// A manager class that is responsible for maintaining the orderbook of a market.
+// A manager class that is responsible for maintaining (i.e. updating) the orderbook of a market.
 type OrderbookMaintainer struct {
-	orderBook *OrderBook
-	syncAPI   ProviderSyncAPI
-	streamAPI ProviderStreamAPI
+	syncAPI              ProviderSyncAPI
+	streamAPI            ProviderStreamAPI
+	depthUpdateValidator IDepthUpdateValidator
 
+	orderBook        *OrderBook
 	depthUpdateQueue deque.Deque[*OrderBookUpdate]
 	mu               sync.Mutex
-	done             chan struct{}
 
 	OutOfSequeceErrCount int
 	wg                   sync.WaitGroup
-
-	depthUpdateValidator IDepthUpdateValidator
+	done                 chan struct{}
 }
 
 func NewOrderBookMaintainer(
@@ -32,11 +31,12 @@ func NewOrderBookMaintainer(
 	depthUpdateValidator IDepthUpdateValidator,
 ) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
-		syncAPI:   syncAPI,
-		streamAPI: stream,
+		syncAPI:              syncAPI,
+		streamAPI:            stream,
+		depthUpdateValidator: depthUpdateValidator,
 
 		depthUpdateQueue:     deque.Deque[*OrderBookUpdate]{},
-		depthUpdateValidator: depthUpdateValidator,
+		OutOfSequeceErrCount: 0,
 		mu:                   sync.Mutex{},
 	}
 }
@@ -79,6 +79,9 @@ func (m *OrderbookMaintainer) queueReader() {
 			err := m.depthUpdateValidator.IsValidUpd(update, m.orderBook.LastUpdateID)
 			if err != nil {
 				// TODO: process what to do when update is invalid.
+				if m.depthUpdateValidator.IsErrOutOfSequece(err) {
+					m.OutOfSequeceErrCount++
+				}
 				m.mu.Unlock()
 				continue
 			}
