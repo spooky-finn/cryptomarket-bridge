@@ -2,9 +2,7 @@ package binance
 
 import "github.com/spooky-finn/go-cryptomarkets-bridge/domain"
 
-type BinanceDepthUpdateValidator struct {
-	OutOfSequeceErrTrashold int
-}
+type BinanceDepthUpdateValidator struct{}
 
 func (v *BinanceDepthUpdateValidator) IsValidUpd(update *domain.OrderBookUpdate, orderBookLastUpdId int64) error {
 	// Drop any event where u is <= lastUpdateId in the snapshot
@@ -30,7 +28,6 @@ func (v *BinanceDepthUpdateValidator) IsErrOutOfSequece(err error) bool {
 
 func (v *BinanceDepthUpdateValidator) IsErrOutdated(err error) bool {
 	return err == domain.ErrOrderBookUpdateIsOutdated
-
 }
 
 // Drop any event where u is <= lastUpdateId in the snapshot

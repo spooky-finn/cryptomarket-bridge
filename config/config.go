@@ -1,3 +1,6 @@
 package config
 
-var DebugMode = false
+var (
+	DebugMode                         = false
+	OrderBookOutOfSequeceErrThreshold = 10
+)

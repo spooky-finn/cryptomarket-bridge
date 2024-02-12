@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -26,13 +27,13 @@ type OrderbookMaintainer struct {
 }
 
 func NewOrderBookMaintainer(
-	stream ProviderStreamAPI,
+	streamAPI ProviderStreamAPI,
 	syncAPI ProviderSyncAPI,
 	depthUpdateValidator IDepthUpdateValidator,
 ) *OrderbookMaintainer {
 	return &OrderbookMaintainer{
 		syncAPI:              syncAPI,
-		streamAPI:            stream,
+		streamAPI:            streamAPI,
 		depthUpdateValidator: depthUpdateValidator,
 
 		depthUpdateQueue:     deque.Deque[*OrderBookUpdate]{},
@@ -82,6 +83,13 @@ func (m *OrderbookMaintainer) queueReader() {
 				if m.depthUpdateValidator.IsErrOutOfSequece(err) {
 					m.OutOfSequeceErrCount++
 				}
+
+				if m.OutOfSequeceErrCount > config.OrderBookOutOfSequeceErrThreshold {
+					fmt.Printf("orderbook outdated and stopped. Provider=%s, Symbol=%s", m.orderBook.Provider, m.orderBook.Symbol.String())
+					m.orderBook.StatusOutdated()
+					m.Stop()
+				}
+
 				m.mu.Unlock()
 				continue
 			}
@@ -104,7 +112,7 @@ func (m *OrderbookMaintainer) runStreamSubscriber(symbol *MarketSymbol) <-chan s
 		logger.Fatalf("error while subscribing to depth update stream  " + err.Error())
 	}
 
-	m.wg.Add(2)
+	m.wg.Add(1)
 	go func() {
 		for {
 			select {

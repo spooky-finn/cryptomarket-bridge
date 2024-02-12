@@ -3,10 +3,8 @@ package domain
 import "errors"
 
 var (
-	// This kind of error requesre to be registered and after some thrashoyld reached, the orderbool should be recreated
 	ErrOrderBookUpdateIsOutOfSequece = errors.New("order book update is out of sequece")
-	// should gust skip them
-	ErrOrderBookUpdateIsOutdated = errors.New("order book update is outdated")
+	ErrOrderBookUpdateIsOutdated     = errors.New("order book update is outdated")
 )
 
 type DepthUpdateValidator struct {
